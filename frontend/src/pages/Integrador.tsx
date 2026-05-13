@@ -185,6 +185,9 @@ export default function Integrador() {
   const { questions } = useContext(ContentContext)
   const { progress, saveProgress } = useContext(ProgressContext)
   const [showResults, setShowResults] = useState(false)
+  const [shuffledQuestions, setShuffledQuestions] = useState<typeof questions | null>(null)
+
+  const displayQuestions = shuffledQuestions ?? questions
 
   const integradorItems = useMemo(() => getIntegradorItems(questions), [questions])
   const answeredCount = integradorItems.filter(id => !!progress[id]).length
@@ -198,6 +201,17 @@ export default function Integrador() {
     setShowResults(true)
   }
 
+  const handleShuffle = () => {
+    const arr = [...questions]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const tmp = arr[i]
+      arr[i] = arr[j]
+      arr[j] = tmp
+    }
+    setShuffledQuestions(arr)
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       {showResults && (
@@ -207,9 +221,31 @@ export default function Integrador() {
         />
       )}
 
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-ub-dark">Modelo Integrador</h2>
-        <p className="text-gray-500 text-sm">Simulacro completo del parcial 2022 con todas las secciones correlativas.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-ub-dark">Modelo Integrador</h2>
+          <p className="text-gray-500 text-sm">Simulacro completo del parcial 2022 con todas las secciones correlativas.</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {shuffledQuestions && (
+            <button
+              onClick={() => setShuffledQuestions(null)}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+            >
+              Orden original
+            </button>
+          )}
+          <button
+            onClick={handleShuffle}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-ub-dark text-white hover:bg-ub-mid transition-all"
+            title="Mezclar el orden de las secciones"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {shuffledQuestions ? 'Re-mezclar' : 'Mezclar'}
+          </button>
+        </div>
       </div>
 
       {/* Progress tracker */}
@@ -240,7 +276,12 @@ export default function Integrador() {
 
         {/* Quick nav */}
         <div className="mt-3 flex flex-wrap gap-2">
-          {questions.map(s => (
+          {shuffledQuestions && (
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full self-center">
+              orden mezclado
+            </span>
+          )}
+          {displayQuestions.map(s => (
             <a
               key={s.id}
               href={`#section-${s.id}`}
@@ -256,7 +297,7 @@ export default function Integrador() {
         </div>
       </div>
 
-      {questions.map(section => (
+      {displayQuestions.map(section => (
         <SectionCard key={section.id} section={section as Section} />
       ))}
     </div>

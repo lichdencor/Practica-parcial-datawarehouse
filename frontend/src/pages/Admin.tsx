@@ -544,6 +544,17 @@ function ContentEditor({ contentKey, label, description, currentData }: {
     setJsonText(JSON.stringify(updated, null, 2))
   }
 
+  const moveItem = (index: number, direction: 'up' | 'down') => {
+    const newIdx = direction === 'up' ? index - 1 : index + 1
+    if (newIdx < 0 || newIdx >= tempData.length) return
+    const updated = [...tempData]
+    const tmp = updated[index]
+    updated[index] = updated[newIdx]
+    updated[newIdx] = tmp
+    setTempData(updated)
+    setJsonText(JSON.stringify(updated, null, 2))
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6">
       <div className="flex items-start justify-between mb-1">
@@ -608,6 +619,28 @@ function ContentEditor({ contentKey, label, description, currentData }: {
             <div className="space-y-4 max-h-[500px] overflow-y-auto p-2 border border-dashed border-gray-200 rounded-xl">
               {tempData.map((item: any, idx: number) => (
                 <div key={idx} className="p-4 bg-gray-50 rounded-xl border border-gray-200 relative group">
+                  <div className="absolute top-2 left-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                    <button
+                      onClick={() => moveItem(idx, 'up')}
+                      disabled={idx === 0}
+                      className="p-0.5 text-gray-400 hover:text-ub-mid disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover arriba"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => moveItem(idx, 'down')}
+                      disabled={idx === tempData.length - 1}
+                      className="p-0.5 text-gray-400 hover:text-ub-mid disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover abajo"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
                   <button
                     onClick={() => removeItem(idx)}
                     className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
@@ -618,6 +651,16 @@ function ContentEditor({ contentKey, label, description, currentData }: {
                   </button>
                   {contentKey === 'sqlPractices' && (
                     <div className="grid gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">ID</label>
+                        <input
+                          type="text"
+                          value={item.id}
+                          onChange={e => updateItem(idx, { ...item, id: e.target.value })}
+                          className="w-full text-[11px] font-mono p-1.5 rounded border border-gray-200 bg-white focus:outline-none focus:border-ub-mid text-gray-500"
+                          placeholder="ej: sql_join_1"
+                        />
+                      </div>
                       <div className="flex gap-4">
                         <div className="flex-1">
                           <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Título</label>
@@ -1176,6 +1219,144 @@ function ContentEditor({ contentKey, label, description, currentData }: {
   )
 }
 
+// --- Section Order Panel ---
+
+function SectionOrderPanel() {
+  const { questions, saveContent } = useContext(ContentContext)
+  const [order, setOrder] = useState<typeof questions | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [success, setSuccess] = useState(false)
+
+  const displayOrder = order ?? questions
+
+  const move = (idx: number, direction: 'up' | 'down') => {
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (newIdx < 0 || newIdx >= displayOrder.length) return
+    const updated = [...displayOrder]
+    const tmp = updated[idx]
+    updated[idx] = updated[newIdx]
+    updated[newIdx] = tmp
+    setOrder(updated)
+  }
+
+  const shuffle = () => {
+    const arr = [...questions]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const tmp = arr[i]
+      arr[i] = arr[j]
+      arr[j] = tmp
+    }
+    setOrder(arr)
+  }
+
+  const save = async () => {
+    if (!order) return
+    setSaving(true)
+    try {
+      await saveContent('questions', order)
+      setOrder(null)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const typeColors: Record<string, string> = {
+    'multiple-choice': 'bg-blue-100 text-blue-700',
+    'dwh-diagram': 'bg-purple-100 text-purple-700',
+    'sql-shell': 'bg-green-100 text-green-700',
+    'schema-question': 'bg-amber-100 text-amber-700',
+  }
+  const typeLabels: Record<string, string> = {
+    'multiple-choice': 'MC',
+    'dwh-diagram': 'DWH',
+    'sql-shell': 'SQL',
+    'schema-question': 'Esquema',
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="font-bold text-gray-800">Orden de secciones del Integrador</h3>
+          <p className="text-gray-400 text-xs mt-0.5">Reordenar cambia el orden en el que aparecen los puntos del parcial. Los cambios se persisten en MongoDB.</p>
+        </div>
+        <button
+          onClick={shuffle}
+          className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-ub-dark text-white hover:bg-ub-mid transition-all flex-shrink-0"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Mezclar
+        </button>
+      </div>
+
+      {success && (
+        <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded text-green-700 text-xs font-medium">
+          Orden guardado en MongoDB.
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {displayOrder.map((section, idx) => (
+          <div key={section.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200 group">
+            <span className="text-[10px] font-black text-gray-300 w-5 text-center">{idx + 1}</span>
+            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${typeColors[section.type] ?? 'bg-gray-100 text-gray-500'}`}>
+              {typeLabels[section.type] ?? section.type}
+            </span>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-bold text-gray-800 truncate block">{section.title}</span>
+              {section.subtitle && <span className="text-[10px] text-gray-400 truncate block">{section.subtitle}</span>}
+            </div>
+            <span className="text-[9px] font-mono text-gray-300">id:{section.id}</span>
+            <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+              <button
+                onClick={() => move(idx, 'up')}
+                disabled={idx === 0}
+                className="p-0.5 text-gray-400 hover:text-ub-mid disabled:opacity-20 disabled:cursor-not-allowed"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
+              <button
+                onClick={() => move(idx, 'down')}
+                disabled={idx === displayOrder.length - 1}
+                className="p-0.5 text-gray-400 hover:text-ub-mid disabled:opacity-20 disabled:cursor-not-allowed"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {order && (
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-2 bg-ub-dark text-white text-xs font-bold rounded-lg hover:bg-ub-mid transition-all disabled:opacity-50"
+          >
+            {saving ? 'Guardando…' : 'Guardar orden en MongoDB'}
+          </button>
+          <button
+            onClick={() => setOrder(null)}
+            className="px-4 py-2 text-gray-500 text-xs font-bold rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+          >
+            Descartar cambios
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- Main Admin Page ---
 
 // --- Esquemas Section (DWH Builder) ---
@@ -1446,6 +1627,7 @@ export default function Admin() {
           <p className="text-gray-500 text-sm mb-6">
             Los cambios guardados sobreescriben el contenido estático para todos los usuarios. Si querés restaurar el original, pegá el contenido del archivo <code className="bg-gray-100 px-1 rounded text-xs">src/data/*.ts</code>.
           </p>
+          <SectionOrderPanel />
           {CONTENT_TYPES.map(ct => (
             <ContentEditor
               key={ct.key}
