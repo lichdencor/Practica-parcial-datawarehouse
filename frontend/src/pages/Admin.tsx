@@ -169,10 +169,27 @@ const CONTENT_TYPES = [
     description: 'Ejercicios de identificación Fact vs Dimension',
     defaultData: quickPracticeData,
   },
+  {
+    key: 'sqlPractices' as const,
+    label: 'Módulo SQL Training',
+    description: 'Ejercicios de SQL estructurados por niveles',
+    defaultData: sqlPracticeData,
+  },
 ]
 
 function validateContent(type: string, data: any): string | null {
   if (!Array.isArray(data)) return 'El contenido debe ser un array.'
+
+  if (type === 'sqlPractices') {
+    for (const item of data) {
+      if (!item.id || !item.title || !item.difficulty || !item.objective || !item.referenceQuery) {
+        return 'Estructura de SQL Practice inválida. id, title, difficulty, objective y referenceQuery son obligatorios.'
+      }
+      if (!['facil', 'intermedio', 'avanzado', 'reto'].includes(item.difficulty)) {
+        return 'Dificultad inválida: ' + item.difficulty
+      }
+    }
+  }
 
   if (type === 'quickPractice') {
     for (const item of data) {
@@ -230,7 +247,7 @@ function validateContent(type: string, data: any): string | null {
 }
 
 function ContentEditor({ contentKey, label, description, currentData }: {
-  contentKey: 'questions' | 'theory' | 'quickPractice'
+  contentKey: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices'
   label: string
   description: string
   currentData: any
@@ -298,6 +315,8 @@ function ContentEditor({ contentKey, label, description, currentData }: {
       newItem = { id: `p${Date.now()}`, tableName: 'Nueva Tabla', columns: [], correctType: 'fact', explanation: '' }
     } else if (contentKey === 'theory') {
       newItem = { category: 'Nueva Categoría', concepts: [] }
+    } else if (contentKey === 'sqlPractices') {
+      newItem = { id: `sql_${Date.now()}`, title: 'Nueva Práctica SQL', difficulty: 'facil', description: '', objective: '', hint: '', referenceQuery: '' }
     } else {
       newItem = { id: Date.now(), title: 'Nuevo Punto', subtitle: '', type: 'multiple-choice', questions: [] }
     }
@@ -384,6 +403,78 @@ function ContentEditor({ contentKey, label, description, currentData }: {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
+                  {contentKey === 'sqlPractices' && (
+                    <div className="grid gap-3">
+                      <div className="flex gap-4">
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Título</label>
+                          <input
+                            type="text"
+                            value={item.title}
+                            onChange={e => updateItem(idx, { ...item, title: e.target.value })}
+                            className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Dificultad</label>
+                          <select
+                            value={item.difficulty}
+                            onChange={e => updateItem(idx, { ...item, difficulty: e.target.value })}
+                            className="text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                          >
+                            <option value="facil">Fácil</option>
+                            <option value="intermedio">Intermedio</option>
+                            <option value="avanzado">Avanzado</option>
+                            <option value="reto">Reto</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Descripción (Contexto)</label>
+                        <textarea
+                          value={item.description}
+                          onChange={e => updateItem(idx, { ...item, description: e.target.value })}
+                          className="w-full text-xs p-2 rounded border border-gray-200 h-16 resize-none focus:outline-none focus:border-ub-mid"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Objetivo (Qué debe hacer)</label>
+                        <textarea
+                          value={item.objective}
+                          onChange={e => updateItem(idx, { ...item, objective: e.target.value })}
+                          className="w-full text-xs p-2 rounded border border-gray-200 h-16 resize-none focus:outline-none focus:border-ub-mid font-medium"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Pista (Hint)</label>
+                          <input
+                            type="text"
+                            value={item.hint}
+                            onChange={e => updateItem(idx, { ...item, hint: e.target.value })}
+                            className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Consulta de Referencia</label>
+                          <textarea
+                            value={item.referenceQuery}
+                            onChange={e => updateItem(idx, { ...item, referenceQuery: e.target.value })}
+                            className="w-full text-xs font-mono p-2 rounded border border-gray-200 h-20 focus:outline-none focus:border-ub-mid bg-gray-900 text-green-400"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Esquema (Opcional)</label>
+                        <textarea
+                          value={item.schema}
+                          onChange={e => updateItem(idx, { ...item, schema: e.target.value })}
+                          className="w-full text-[10px] font-mono p-2 rounded border border-gray-200 h-20 focus:outline-none focus:border-ub-mid bg-gray-50"
+                          placeholder="CREATE TABLE ... "
+                        />
+                      </div>
+                    </div>
+                  )}
                   {contentKey === 'quickPractice' && (
                     <div className="grid gap-3">
                       <div className="flex gap-4">
@@ -826,10 +917,10 @@ function ContentEditor({ contentKey, label, description, currentData }: {
 // --- Main Admin Page ---
 
 export default function Admin() {
-  const { questions, theory, quickPractice } = useContext(ContentContext)
+  const { questions, theory, quickPractice, sqlPractices } = useContext(ContentContext)
   const [tab, setTab] = useState<'users' | 'content'>('users')
 
-  const currentData = { questions, theory, quickPractice }
+  const currentData = { questions, theory, quickPractice, sqlPractices }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">

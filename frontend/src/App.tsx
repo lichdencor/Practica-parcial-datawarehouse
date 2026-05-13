@@ -7,6 +7,7 @@ import AppRouter from './AppRouter'
 import { examSections } from './data/questions'
 import { theoryConcepts } from './data/theory'
 import { quickPracticeData } from './data/practice_quick'
+import { sqlPracticeData } from './data/sql_practice'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
 const TOKEN_KEY = 'parcial_dbs2_token'
@@ -51,18 +52,21 @@ export const ProgressContext = createContext<ProgressContextType>({
 type ExamSections = typeof examSections
 type TheoryConcepts = typeof theoryConcepts
 type QuickPracticeData = typeof quickPracticeData
+type SqlPractices = typeof sqlPracticeData
 
 interface ContentContextType {
   questions: ExamSections
   theory: TheoryConcepts
   quickPractice: QuickPracticeData
-  saveContent: (type: 'questions' | 'theory' | 'quickPractice', data: any) => Promise<void>
+  sqlPractices: SqlPractices
+  saveContent: (type: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices', data: any) => Promise<void>
 }
 
 export const ContentContext = createContext<ContentContextType>({
   questions: examSections,
   theory: theoryConcepts,
   quickPractice: quickPracticeData,
+  sqlPractices: sqlPracticeData,
   saveContent: async () => {},
 })
 
@@ -177,6 +181,7 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
   const [questions, setQuestions] = useState<ExamSections>(examSections)
   const [theory, setTheory] = useState<TheoryConcepts>(theoryConcepts)
   const [quickPractice, setQuickPractice] = useState<QuickPracticeData>(quickPracticeData)
+  const [sqlPractices, setSqlPractices] = useState<SqlPractices>(sqlPracticeData)
 
   useEffect(() => {
     const token = sessionStorage.getItem(TOKEN_KEY)
@@ -197,14 +202,16 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
       fetchContent('questions'),
       fetchContent('theory'),
       fetchContent('quickPractice'),
-    ]).then(([q, t, p]) => {
+      fetchContent('sqlPractices'),
+    ]).then(([q, t, p, s]) => {
       if (q) setQuestions(q)
       if (t) setTheory(t)
       if (p) setQuickPractice(p)
+      if (s) setSqlPractices(s)
     })
   }, [])
 
-  const saveContent = async (type: 'questions' | 'theory' | 'quickPractice', data: any) => {
+  const saveContent = async (type: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices', data: any) => {
     const token = sessionStorage.getItem(TOKEN_KEY)
     const res = await fetch(`${GATEWAY_URL}/api/admin/content/${type}`, {
       method: 'PUT',
@@ -219,10 +226,11 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
     if (type === 'questions') setQuestions(data)
     if (type === 'theory') setTheory(data)
     if (type === 'quickPractice') setQuickPractice(data)
+    if (type === 'sqlPractices') setSqlPractices(data)
   }
 
   return (
-    <ContentContext.Provider value={{ questions, theory, quickPractice, saveContent }}>
+    <ContentContext.Provider value={{ questions, theory, quickPractice, sqlPractices, saveContent }}>
       {children}
     </ContentContext.Provider>
   )
