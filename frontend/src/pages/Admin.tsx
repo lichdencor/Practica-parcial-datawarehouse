@@ -4,6 +4,9 @@ import { examSections } from '../data/questions'
 import { theoryConcepts } from '../data/theory'
 import { quickPracticeData } from '../data/practice_quick'
 import { sqlPracticeData } from '../data/sql_practice'
+import { glossaryData } from '../data/glossary'
+import DwhDiagramBuilder from '../components/DwhDiagramBuilder'
+import type { DwhDiagramConfig } from '../data/questions'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
 const TOKEN_KEY = 'parcial_dbs2_token'
@@ -176,6 +179,12 @@ const CONTENT_TYPES = [
     description: 'Ejercicios de SQL estructurados por niveles',
     defaultData: sqlPracticeData,
   },
+  {
+    key: 'glossary' as const,
+    label: 'Glosario DWH',
+    description: 'Términos y definiciones del glosario de Data Warehousing',
+    defaultData: glossaryData,
+  },
 ]
 
 function validateContent(type: string, data: any): string | null {
@@ -225,10 +234,18 @@ function validateContent(type: string, data: any): string | null {
     }
   }
 
+  if (type === 'glossary') {
+    for (const item of data) {
+      if (!item.id || !item.term || !item.definition || !item.category) {
+        return 'Entrada inválida. id, term, definition y category son obligatorios.'
+      }
+    }
+  }
+
   if (type === 'questions') {
     for (const section of data) {
       if (!section.id || !section.title || !section.type) return 'Sección de preguntas inválida. id, title y type son obligatorios.'
-      if (!['multiple-choice', 'dwh-diagram', 'sql-shell'].includes(section.type)) return 'Tipo de sección inválido: ' + section.type
+      if (!['multiple-choice', 'dwh-diagram', 'sql-shell', 'schema-question'].includes(section.type)) return 'Tipo de sección inválido: ' + section.type
       
       if (section.type === 'multiple-choice') {
         if (!Array.isArray(section.questions)) return 'La sección multiple-choice debe tener un array de questions.'
@@ -248,7 +265,7 @@ function validateContent(type: string, data: any): string | null {
 }
 
 function ContentEditor({ contentKey, label, description, currentData }: {
-  contentKey: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices'
+  contentKey: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices' | 'glossary'
   label: string
   description: string
   currentData: any
@@ -318,6 +335,8 @@ function ContentEditor({ contentKey, label, description, currentData }: {
       newItem = { category: 'Nueva Categoría', concepts: [] }
     } else if (contentKey === 'sqlPractices') {
       newItem = { id: `sql_${Date.now()}`, title: 'Nueva Práctica SQL', difficulty: 'facil', description: '', objective: '', hint: '', referenceQuery: '' }
+    } else if (contentKey === 'glossary') {
+      newItem = { id: `g_${Date.now()}`, term: 'Nuevo Término', definition: '', category: 'Conceptos Base' }
     } else {
       newItem = { id: Date.now(), title: 'Nuevo Punto', subtitle: '', type: 'multiple-choice', questions: [] }
     }
@@ -774,6 +793,55 @@ function ContentEditor({ contentKey, label, description, currentData }: {
                       </div>
                     </div>
                   )}
+                  {contentKey === 'glossary' && (
+                    <div className="grid gap-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Término</label>
+                          <input
+                            type="text"
+                            value={item.term}
+                            onChange={e => updateItem(idx, { ...item, term: e.target.value })}
+                            className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Categoría</label>
+                          <input
+                            type="text"
+                            value={item.category}
+                            onChange={e => updateItem(idx, { ...item, category: e.target.value })}
+                            className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                            list="glossary-categories"
+                          />
+                          <datalist id="glossary-categories">
+                            <option value="Conceptos Base" />
+                            <option value="Modelado" />
+                            <option value="Tablas" />
+                            <option value="Análisis" />
+                          </datalist>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Definición</label>
+                        <textarea
+                          value={item.definition}
+                          onChange={e => updateItem(idx, { ...item, definition: e.target.value })}
+                          className="w-full text-xs p-2 rounded border border-gray-200 h-20 resize-none focus:outline-none focus:border-ub-mid"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Ejemplo (Opcional)</label>
+                        <input
+                          type="text"
+                          value={item.example ?? ''}
+                          onChange={e => updateItem(idx, { ...item, example: e.target.value || undefined })}
+                          className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                          placeholder="Ej: ..."
+                        />
+                      </div>
+                    </div>
+                  )}
                   {contentKey === 'questions' && (
                     <div className="grid gap-3">
                       <div className="flex gap-4">
@@ -917,11 +985,217 @@ function ContentEditor({ contentKey, label, description, currentData }: {
 
 // --- Main Admin Page ---
 
-export default function Admin() {
-  const { questions, theory, quickPractice, sqlPractices } = useContext(ContentContext)
-  const [tab, setTab] = useState<'users' | 'content'>('users')
+// --- Esquemas Section (DWH Builder) ---
 
-  const currentData = { questions, theory, quickPractice, sqlPractices }
+const EMPTY_DIAGRAM: DwhDiagramConfig = {
+  title: 'Nuevo Esquema',
+  description: '',
+  tables: [],
+  connections: [],
+}
+
+function EsquemasSection() {
+  const { questions, saveContent } = useContext(ContentContext)
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [draft, setDraft] = useState<DwhDiagramConfig>(EMPTY_DIAGRAM)
+  const [newTitle, setNewTitle] = useState('')
+  const [newSubtitle, setNewSubtitle] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [success, setSuccess] = useState(false)
+
+  const diagramSections = questions.filter(
+    s => s.type === 'dwh-diagram' || s.type === 'schema-question'
+  )
+
+  const startEdit = (globalIdx: number) => {
+    const section = questions[globalIdx]
+    setDraft(section.diagram ?? EMPTY_DIAGRAM)
+    setSelectedIdx(globalIdx)
+    setCreating(false)
+  }
+
+  const startCreate = () => {
+    setDraft(EMPTY_DIAGRAM)
+    setNewTitle(`Punto ${questions.length + 1}`)
+    setNewSubtitle('')
+    setCreating(true)
+    setSelectedIdx(null)
+  }
+
+  const saveEdit = async () => {
+    if (selectedIdx === null) return
+    setSaving(true)
+    const updated = questions.map((s, i) =>
+      i === selectedIdx ? { ...s, diagram: draft } : s
+    )
+    try {
+      await saveContent('questions', updated)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveNew = async () => {
+    if (!newTitle.trim()) return
+    setSaving(true)
+    const newSection = {
+      id: Math.max(...questions.map(q => q.id), 0) + 1,
+      title: newTitle.trim(),
+      subtitle: newSubtitle.trim(),
+      type: 'schema-question' as const,
+      diagram: draft,
+      questions: [],
+    }
+    try {
+      await saveContent('questions', [...questions, newSection])
+      setCreating(false)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {success && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-xs font-medium">
+          Esquema guardado correctamente en MongoDB.
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          Construí y editá diagramas DWH visualmente. Los cambios se guardan en MongoDB y aplican a todos los usuarios.
+        </p>
+        <button
+          onClick={startCreate}
+          className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-ub-dark text-white hover:bg-ub-mid transition-all"
+        >
+          + Nuevo Ejercicio de Esquema
+        </button>
+      </div>
+
+      {/* Existing diagram sections list */}
+      {diagramSections.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {diagramSections.map(section => {
+            const globalIdx = questions.indexOf(section)
+            const isEditing = selectedIdx === globalIdx && !creating
+            return (
+              <div
+                key={section.id}
+                className={`bg-white rounded-xl border p-4 transition-all ${isEditing ? 'border-ub-mid ring-1 ring-ub-mid/30' : 'border-gray-200 hover:border-ub-mid/50'}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${section.type === 'schema-question' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {section.type === 'schema-question' ? 'Esquema + Preguntas' : 'Diagrama DWH'}
+                    </span>
+                    <p className="font-bold text-sm text-gray-800 mt-1">{section.title}</p>
+                    <p className="text-xs text-gray-400">{section.subtitle}</p>
+                  </div>
+                  <button
+                    onClick={() => isEditing ? setSelectedIdx(null) : startEdit(globalIdx)}
+                    className="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-ub-mid/30 text-ub-mid hover:bg-blue-50 flex-shrink-0"
+                  >
+                    {isEditing ? 'Cerrar' : 'Editar'}
+                  </button>
+                </div>
+
+                {isEditing && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <DwhDiagramBuilder value={draft} onChange={setDraft} />
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={saveEdit}
+                        disabled={saving}
+                        className="px-4 py-2 bg-ub-dark text-white text-xs font-bold rounded-lg hover:bg-ub-mid disabled:opacity-50"
+                      >
+                        {saving ? 'Guardando…' : 'Guardar Diagrama'}
+                      </button>
+                      <button
+                        onClick={() => setSelectedIdx(null)}
+                        className="px-4 py-2 text-gray-500 text-xs font-bold rounded-lg border border-gray-200 hover:bg-gray-50"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {diagramSections.length === 0 && !creating && (
+        <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+          <p>No hay ejercicios de diagrama. Creá uno con el botón de arriba.</p>
+        </div>
+      )}
+
+      {/* New schema exercise form */}
+      {creating && (
+        <div className="bg-white rounded-2xl border border-ub-mid p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-gray-800">Nuevo Ejercicio de Esquema</h4>
+            <button onClick={() => setCreating(false)} className="text-gray-400 hover:text-gray-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Título</label>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={e => setNewTitle(e.target.value)}
+                className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Subtítulo / Descripción</label>
+              <input
+                type="text"
+                value={newSubtitle}
+                onChange={e => setNewSubtitle(e.target.value)}
+                className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+              />
+            </div>
+          </div>
+          <DwhDiagramBuilder value={draft} onChange={setDraft} />
+          <div className="flex gap-2">
+            <button
+              onClick={saveNew}
+              disabled={saving || !newTitle.trim()}
+              className="px-4 py-2 bg-ub-dark text-white text-xs font-bold rounded-lg hover:bg-ub-mid disabled:opacity-50"
+            >
+              {saving ? 'Guardando…' : 'Guardar Ejercicio'}
+            </button>
+            <button
+              onClick={() => setCreating(false)}
+              className="px-4 py-2 text-gray-500 text-xs font-bold rounded-lg border border-gray-200 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Admin() {
+  const { questions, theory, quickPractice, sqlPractices, glossary } = useContext(ContentContext)
+  const [tab, setTab] = useState<'users' | 'content' | 'esquemas'>('users')
+
+  const currentData = { questions, theory, quickPractice, sqlPractices, glossary }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -951,6 +1225,14 @@ export default function Admin() {
         >
           Contenido
         </button>
+        <button
+          onClick={() => setTab('esquemas')}
+          className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            tab === 'esquemas' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Esquemas DWH
+        </button>
       </div>
 
       {tab === 'users' && (
@@ -975,6 +1257,16 @@ export default function Admin() {
               currentData={currentData[ct.key]}
             />
           ))}
+        </div>
+      )}
+
+      {tab === 'esquemas' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <h3 className="font-bold text-gray-800 mb-1">Constructor de Esquemas DWH</h3>
+          <p className="text-gray-400 text-xs mb-5">
+            Armá diagramas DWH visualmente. Podés editar los esquemas existentes o crear nuevos ejercicios de tipo "Esquema + Preguntas" donde el alumno ve el diagrama y responde preguntas sobre él.
+          </p>
+          <EsquemasSection />
         </div>
       )}
     </div>

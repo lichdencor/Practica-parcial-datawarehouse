@@ -39,7 +39,7 @@ export interface ExamSection {
   id: number
   title: string
   subtitle: string
-  type: 'multiple-choice' | 'dwh-diagram' | 'sql-shell'
+  type: 'multiple-choice' | 'dwh-diagram' | 'sql-shell' | 'schema-question'
   theory?: string
   questions?: Question[]
   diagram?: DwhDiagramConfig

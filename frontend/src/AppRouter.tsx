@@ -5,6 +5,8 @@ import Conceptos from './pages/Conceptos'
 import Practica from './pages/Practica'
 import Ejercicios from './pages/Ejercicios'
 import Integrador from './pages/Integrador'
+import Glosario from './pages/Glosario'
+import Cronometrado from './pages/Cronometrado'
 import Admin from './pages/Admin'
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -19,6 +21,8 @@ export default function AppRouter() {
       <Route path="/practica" element={<Practica />} />
       <Route path="/ejercicios" element={<Ejercicios />} />
       <Route path="/integrador" element={<Integrador />} />
+      <Route path="/glosario" element={<Glosario />} />
+      <Route path="/cronometrado" element={<Cronometrado />} />
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
       <Route path="/" element={<Navigate to="/conceptos" replace />} />
       <Route path="*" element={<Navigate to="/conceptos" replace />} />

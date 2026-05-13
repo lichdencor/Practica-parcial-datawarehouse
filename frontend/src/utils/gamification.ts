@@ -70,6 +70,8 @@ export function getIntegradorItems(questions: ExamSection[]): string[] {
       ids.push(...section.questions.map(q => q.id))
     } else if (section.type === 'sql-shell' && section.sqlExercises) {
       ids.push(...section.sqlExercises.map(e => e.id))
+    } else if (section.type === 'schema-question' && section.questions) {
+      ids.push(...section.questions.map(q => q.id))
     }
   }
   return ids

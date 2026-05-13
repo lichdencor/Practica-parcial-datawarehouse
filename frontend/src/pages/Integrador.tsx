@@ -57,6 +57,22 @@ function SectionCard({ section }: { section: Section }) {
           {section.type === 'sql-shell' && section.sqlExercises && (
             <SqlShell exercises={section.sqlExercises} theory={section.theory} />
           )}
+          {section.type === 'schema-question' && section.diagram && (
+            <div>
+              {section.theory && (
+                <div className="bg-blue-50 border-l-4 border-ub-mid rounded-r-xl p-4 mb-4 text-sm text-gray-700">
+                  {section.theory}
+                </div>
+              )}
+              <DwhDiagram diagram={section.diagram} />
+              {section.questions && section.questions.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">Preguntas sobre el esquema</p>
+                  <MultipleChoiceSection section={section} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
