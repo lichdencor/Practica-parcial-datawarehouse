@@ -40,11 +40,11 @@ export default function Ejercicios() {
         <p className="text-gray-500">Domina SQL para Data Warehousing: desde inserciones básicas hasta el modelado de hechos y dimensiones.</p>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
+      <div className="grid lg:grid-cols-3 gap-8 items-start">
         {/* Sidebar: List of Exercises */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="lg:col-span-1 flex flex-col gap-4 sticky top-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 px-1">Ruta de aprendizaje</h3>
-          <div className="space-y-2">
+          <div className="overflow-y-auto max-h-[calc(100vh-320px)] space-y-2 pr-1">
             {sqlPractices.map((p, idx) => {
               const isCompleted = progress[p.id]
               const isSelected = selectedId === p.id
@@ -84,7 +84,7 @@ export default function Ejercicios() {
         </div>
 
         {/* Main: Exercise Content */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 overflow-y-auto max-h-[calc(100vh-200px)]">
           {selectedPractice && mappedExercise ? (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm mb-6">
