@@ -153,6 +153,198 @@ function UsersSection() {
   )
 }
 
+// --- Organica Section ---
+
+interface OrganicaUser {
+  _id: string
+  email: string
+  addedBy: string
+  createdAt: string
+}
+
+interface OrganicaDomain {
+  _id: string
+  domain: string
+  addedBy: string
+  createdAt: string
+}
+
+function OrganicaSection() {
+  const [users, setUsers] = useState<OrganicaUser[]>([])
+  const [domains, setDomains] = useState<OrganicaDomain[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [newEmail, setNewEmail] = useState('')
+  const [newDomain, setNewDomain] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const fetchData = async () => {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    try {
+      const [uRes, dRes] = await Promise.all([
+        fetch(`${GATEWAY_URL}/api/admin/organica/users`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${GATEWAY_URL}/api/admin/organica/domains`, { headers: { Authorization: `Bearer ${token}` } })
+      ])
+      const uData = await uRes.json()
+      const dData = await dRes.json()
+      setUsers(Array.isArray(uData) ? uData : [])
+      setDomains(Array.isArray(dData) ? dData : [])
+    } catch (err) {
+      setError('Error al cargar datos de Organica')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchData() }, [])
+
+  const addUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newEmail.includes('@')) return
+    setSubmitting(true)
+    try {
+      const token = sessionStorage.getItem(TOKEN_KEY)
+      const res = await fetch(`${GATEWAY_URL}/api/admin/organica/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: newEmail })
+      })
+      if (!res.ok) throw new Error('Error al añadir usuario')
+      setNewEmail('')
+      fetchData()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const addDomain = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newDomain.includes('.')) return
+    setSubmitting(true)
+    try {
+      const token = sessionStorage.getItem(TOKEN_KEY)
+      const res = await fetch(`${GATEWAY_URL}/api/admin/organica/domains`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ domain: newDomain.replace('@', '') })
+      })
+      if (!res.ok) throw new Error('Error al añadir dominio')
+      setNewDomain('')
+      fetchData()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const removeUser = async (id: string) => {
+    if (!confirm('¿Eliminar este usuario de la lista blanca?')) return
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    await fetch(`${GATEWAY_URL}/api/admin/organica/users/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    fetchData()
+  }
+
+  const removeDomain = async (id: string) => {
+    if (!confirm('¿Eliminar este dominio de la lista blanca?')) return
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    await fetch(`${GATEWAY_URL}/api/admin/organica/domains/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    fetchData()
+  }
+
+  if (loading) return <p className="text-gray-400 text-sm">Cargando Organica…</p>
+
+  return (
+    <div className="space-y-8">
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{error}</div>
+      )}
+
+      {/* Dominios Section */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <h3 className="font-bold text-gray-800">Dominios Permitidos</h3>
+        <p className="text-gray-400 text-xs mb-4">Cualquier usuario con estos dominios podrá ingresar (ej: comunidad.ub.edu.ar).</p>
+        
+        <form onSubmit={addDomain} className="flex gap-2 mb-6">
+          <input
+            type="text"
+            placeholder="ej: gmail.com"
+            value={newDomain}
+            onChange={e => setNewDomain(e.target.value)}
+            className="flex-1 text-sm p-2 rounded-lg border border-gray-200 focus:border-ub-mid outline-none"
+          />
+          <button
+            disabled={submitting}
+            className="px-4 py-2 bg-ub-dark text-white text-xs font-bold rounded-lg hover:bg-ub-mid disabled:opacity-50"
+          >
+            Añadir Dominio
+          </button>
+        </form>
+
+        <div className="flex flex-wrap gap-2">
+          {domains.map(d => (
+            <div key={d._id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg group">
+              <span className="text-xs font-bold text-gray-700">@{d.domain}</span>
+              <button
+                onClick={() => removeDomain(d._id)}
+                className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          ))}
+          {domains.length === 0 && <p className="text-xs text-gray-400 italic">No hay dominios configurados.</p>}
+        </div>
+      </div>
+
+      {/* Usuarios Section */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <h3 className="font-bold text-gray-800">Emails Específicos</h3>
+        <p className="text-gray-400 text-xs mb-4">Correos individuales que tienen acceso aunque su dominio no esté permitido.</p>
+
+        <form onSubmit={addUser} className="flex gap-2 mb-6">
+          <input
+            type="email"
+            placeholder="usuario@ejemplo.com"
+            value={newEmail}
+            onChange={e => setNewEmail(e.target.value)}
+            className="flex-1 text-sm p-2 rounded-lg border border-gray-200 focus:border-ub-mid outline-none"
+          />
+          <button
+            disabled={submitting}
+            className="px-4 py-2 bg-ub-dark text-white text-xs font-bold rounded-lg hover:bg-ub-mid disabled:opacity-50"
+          >
+            Añadir Email
+          </button>
+        </form>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {users.map(u => (
+            <div key={u._id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl group">
+              <span className="text-xs font-medium text-gray-700">{u.email}</span>
+              <button
+                onClick={() => removeUser(u._id)}
+                className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
+          ))}
+          {users.length === 0 && <p className="text-xs text-gray-400 italic">No hay emails configurados.</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Content Editor Section ---
 
 const CONTENT_TYPES = [
@@ -1182,7 +1374,7 @@ function EsquemasSection() {
 
 export default function Admin() {
   const { questions, theory, quickPractice, sqlPractices, glossary } = useContext(ContentContext)
-  const [tab, setTab] = useState<'users' | 'content' | 'esquemas'>('users')
+  const [tab, setTab] = useState<'users' | 'content' | 'esquemas' | 'organica'>('users')
 
   const currentData = { questions, theory, quickPractice, sqlPractices, glossary }
 
@@ -1207,6 +1399,14 @@ export default function Admin() {
           Usuarios
         </button>
         <button
+          onClick={() => setTab('organica')}
+          className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            tab === 'organica' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Organica
+        </button>
+        <button
           onClick={() => setTab('content')}
           className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
             tab === 'content' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
@@ -1229,6 +1429,15 @@ export default function Admin() {
           <h3 className="font-bold text-gray-800 mb-1">Usuarios registrados</h3>
           <p className="text-gray-400 text-xs mb-5">Los admins marcados con estrella son super-admins definidos en el servidor y no pueden ser degradados desde aquí.</p>
           <UsersSection />
+        </div>
+      )}
+
+      {tab === 'organica' && (
+        <div className="space-y-4">
+          <p className="text-gray-500 text-sm mb-6">
+            Gestioná la "Lista Blanca" de acceso institucional. Usuarios con dominios permitidos podrán ingresar sin estar configurados en Dex.
+          </p>
+          <OrganicaSection />
         </div>
       )}
 

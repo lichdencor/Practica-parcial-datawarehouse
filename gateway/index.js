@@ -90,8 +90,26 @@ app.get('/callback', async (req, res) => {
       return res.redirect(`${FRONTEND_URL}?auth_error=invalid_token`);
     }
 
-    // Determine role: super-admins (in ADMIN_EMAILS) always get 'admin'
+    // --- Organica Whitelist Check ---
     const isSuperAdmin = ADMIN_EMAILS.includes(claims.email);
+    
+    // Check Organica unless super-admin
+    if (!isSuperAdmin) {
+      try {
+        const checkRes = await axios.get(`${PROGRESS_SERVICE_URL}/organica/check/${claims.email}`);
+        if (!checkRes.data.allowed) {
+          console.warn(`Access denied for ${claims.email} (not in Organica whitelist)`);
+          return res.redirect(`${FRONTEND_URL}?auth_error=not_authorized`);
+        }
+      } catch (checkErr) {
+        console.error('Organica check failed:', checkErr.message);
+        // Fail-safe: if check service is down, maybe allow? 
+        // For now, let's be strict and block.
+        return res.redirect(`${FRONTEND_URL}?auth_error=auth_service_unavailable`);
+      }
+    }
+
+    // Determine role: super-admins (in ADMIN_EMAILS) always get 'admin'
     const registrationBody = {
       email: claims.email,
       name: claims.name || claims.preferred_username || claims.email,
@@ -266,6 +284,68 @@ app.put('/api/admin/users/:userId/role', verifyToken, requireAdmin, async (req, 
     res.status(err.response?.status || 500).json({ error: 'Failed to reset progress' });
     }
     });
+
+// --- Organica Admin Endpoints ---
+
+app.get('/api/admin/organica/users', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${PROGRESS_SERVICE_URL}/organica/users`);
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({ error: 'Failed to fetch organica users' });
+  }
+});
+
+app.post('/api/admin/organica/users', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.post(`${PROGRESS_SERVICE_URL}/organica/users`, {
+      email: req.body.email,
+      addedBy: req.user.email
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({ error: 'Failed to add organica user' });
+  }
+});
+
+app.delete('/api/admin/organica/users/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.delete(`${PROGRESS_SERVICE_URL}/organica/users/${req.params.id}`);
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({ error: 'Failed to remove organica user' });
+  }
+});
+
+app.get('/api/admin/organica/domains', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${PROGRESS_SERVICE_URL}/organica/domains`);
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({ error: 'Failed to fetch organica domains' });
+  }
+});
+
+app.post('/api/admin/organica/domains', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.post(`${PROGRESS_SERVICE_URL}/organica/domains`, {
+      domain: req.body.domain,
+      addedBy: req.user.email
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({ error: 'Failed to add organica domain' });
+  }
+});
+
+app.delete('/api/admin/organica/domains/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.delete(`${PROGRESS_SERVICE_URL}/organica/domains/${req.params.id}`);
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({ error: 'Failed to remove organica domain' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Gateway running on port ${PORT}`);

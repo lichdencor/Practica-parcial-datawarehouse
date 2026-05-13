@@ -33,7 +33,102 @@ const contentSchema = new mongoose.Schema({
 
 const Content = mongoose.model('Content', contentSchema);
 
+// --- Organica Schemas ---
+
+const organicaUserSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  addedBy: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const OrganicaUser = mongoose.model('OrganicaUser', organicaUserSchema);
+
+const organicaDomainSchema = new mongoose.Schema({
+  domain: { type: String, required: true, unique: true },
+  addedBy: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const OrganicaDomain = mongoose.model('OrganicaDomain', organicaDomainSchema);
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// --- Organica endpoints ---
+
+app.get('/organica/users', async (req, res) => {
+  try {
+    const users = await OrganicaUser.find().sort({ createdAt: -1 });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/organica/users', async (req, res) => {
+  try {
+    const { email, addedBy } = req.body;
+    const user = new OrganicaUser({ email, addedBy });
+    await user.save();
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/organica/users/:id', async (req, res) => {
+  try {
+    await OrganicaUser.findByIdAndDelete(req.params.id);
+    res.json({ message: 'User removed' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/organica/domains', async (req, res) => {
+  try {
+    const domains = await OrganicaDomain.find().sort({ createdAt: -1 });
+    res.json(domains);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/organica/domains', async (req, res) => {
+  try {
+    const { domain, addedBy } = req.body;
+    const dom = new OrganicaDomain({ domain, addedBy });
+    await dom.save();
+    res.json(dom);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/organica/domains/:id', async (req, res) => {
+  try {
+    await OrganicaDomain.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Domain removed' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/organica/check/:email', async (req, res) => {
+  try {
+    const email = req.params.email;
+    const domain = email.split('@')[1];
+
+    const userAllowed = await OrganicaUser.findOne({ email });
+    if (userAllowed) return res.json({ allowed: true });
+
+    const domainAllowed = await OrganicaDomain.findOne({ domain });
+    if (domainAllowed) return res.json({ allowed: true });
+
+    res.json({ allowed: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // --- Progress endpoints ---
 
