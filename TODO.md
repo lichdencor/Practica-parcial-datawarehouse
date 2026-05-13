@@ -24,6 +24,7 @@
 - [x] Super-admins via `ADMIN_EMAILS` env var (permanentes, no desmotables)
 - [x] Rol incluido en JWT de sesión y en `/api/me`
 - [x] Panel admin (`/admin`) — gestión de usuarios y editor de contenido
+- [x] Editor dual (Visual / JSON) con validación estructural de esquemas
 - [x] `ContentContext` — carga contenido de MongoDB con fallback estático
 - [x] Estructura jerárquica en `theory.ts` (`ConceptCategory[]` con subgrupos)
 

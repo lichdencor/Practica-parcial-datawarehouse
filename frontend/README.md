@@ -213,8 +213,10 @@ Solo accesible para usuarios con `role === 'admin'`. `AppRouter` redirige a `/in
 - No puede demotar super-admins (definidos en `ADMIN_EMAILS` en el gateway).
 
 ### Tab Contenido
-- Editor JSON (textarea monospace) para cada tipo de contenido: `questions`, `theory`, `quickPractice`.
-- Al guardar, el JSON se valida en el browser y se persiste en MongoDB via `PUT /api/admin/content/:type`.
+- **Editor Dual:** Permite editar cada tipo de contenido (`questions`, `theory`, `quickPractice`) usando una interfaz **Visual** (formularios interactivos) o **JSON Raw**.
+- **Validación Estructural:** Al intentar guardar, el sistema valida que el contenido (tanto en modo visual como JSON) siga la estructura de datos requerida por la aplicación. Si el esquema es incorrecto, no se permite el guardado.
+- **Agregar Contenido:** Botón interactivo para agregar nuevos registros con valores predeterminados.
+- Al guardar, el contenido se persiste en MongoDB via `PUT /api/admin/content/:type`.
 - El cambio aplica para todos los usuarios en el próximo load de la página.
 - Para restaurar el contenido original, pegar el JSON del archivo `src/data/*.ts` correspondiente.
 
