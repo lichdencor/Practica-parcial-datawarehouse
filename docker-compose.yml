@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  dex:
+    image: dexidp/dex:v2.37.0
+    container_name: parcial-dex
+    ports:
+      - "5556:5556"
+    volumes:
+      - ./dex/config.yaml:/etc/dex/config.yaml:ro
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    networks:
+      - parcial-net
+
+  gateway:
+    build: ./gateway
+    container_name: parcial-gateway
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      SESSION_SECRET: "parcial-dbs2-secret-2024"
+      OIDC_ISSUER: "http://localhost:5556/dex"
+      OIDC_INTERNAL_URL: "http://dex:5556/dex"
+      OIDC_CLIENT_ID: "gateway-client"
+      OIDC_CLIENT_SECRET: "gateway-secret"
+      OIDC_CALLBACK_URL: "http://localhost:3001/callback"
+      FRONTEND_URL: "http://localhost:5173"
+      PROGRESS_SERVICE_URL: "http://progress:3002"
+    depends_on:
+      - dex
+      - progress
+    networks:
+      - parcial-net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_GATEWAY_URL: "http://localhost:3001"
+    container_name: parcial-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - gateway
+    networks:
+      - parcial-net
+
+  mongodb:
+    image: mongo:6.0
+    container_name: parcial-mongodb
+    networks:
+      - parcial-net
+    volumes:
+      - mongo-data:/data/db
+
+  progress:
+    build: ./progress-service
+    container_name: parcial-progress
+    environment:
+      PORT: "3002"
+      MONGODB_URI: "mongodb://mongodb:27017/progress"
+    depends_on:
+      - mongodb
+    networks:
+      - parcial-net
+
+networks:
+  parcial-net:
+    driver: bridge
+
+volumes:
+  mongo-data:

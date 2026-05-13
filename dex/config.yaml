@@ -1,0 +1,52 @@
+issuer: http://localhost:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+  responseTypes:
+    - code
+
+staticClients:
+  - id: gateway-client
+    secret: gateway-secret
+    name: "DBS2 Parcial Gateway"
+    redirectURIs:
+      - "http://localhost:3001/callback"
+
+enablePasswordDB: true
+
+staticPasswords:
+  - email: "estudiante@ub.edu.ar"
+    hash: "$2b$10$xwRC3iSX0db24ZqqSqtBGOzQOeNdOBgW870uZaWnIsiU1x9VBybBu"
+    username: "estudiante"
+    userID: "a8684b08-db88-4b73-90a9-3cd1661f5466"
+
+  - email: "santos.aleson@comunidad.eb.edu.ar"
+    hash: "$2b$10$xwRC3iSX0db24ZqqSqtBGOzQOeNdOBgW870uZaWnIsiU1x9VBybBu"
+    username: "Santos Dante Aleson Cicchino"
+    userID: "P000178451"
+
+  - email: "ornella.cesaro@comunidad.ub.edu.ar"
+    hash: "$2b$10$xwRC3iSX0db24ZqqSqtBGOzQOeNdOBgW870uZaWnIsiU1x9VBybBu"
+    username: "Ornella Marina Cesaro"
+    userID: "P000187149"
+
+  - email: "lucas.chavez@comunidad.ub.edu.ar"
+    hash: "$2b$10$xwRC3iSX0db24ZqqSqtBGOzQOeNdOBgW870uZaWnIsiU1x9VBybBu"
+    username: "Lucas Ignacio Chavez Dencor"
+    userID: "P000184404"
+
+  - email: "milagros.de613@comunidad.ub.edu.ar"
+    hash: "$2b$10$xwRC3iSX0db24ZqqSqtBGOzQOeNdOBgW870uZaWnIsiU1x9VBybBu"
+    username: "Milagros De Castro"
+    userID: "P000184019"
+
+  - email: "matias.frenkel@comunidad.ub.edu.ar"
+    hash: "$2b$10$xwRC3iSX0db24ZqqSqtBGOzQOeNdOBgW870uZaWnIsiU1x9VBybBu"
+    username: "Matias Frenkel"
+    userID: "P000186422"
