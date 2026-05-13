@@ -1,0 +1,32 @@
+# Copiar este archivo a config.yaml y completar los valores.
+# config.yaml está en .gitignore — nunca commitear el archivo real.
+
+issuer: http://localhost:5556/dex   # cambiar por la URL pública al exponer via ngrok
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+  responseTypes:
+    - code
+
+staticClients:
+  - id: gateway-client
+    secret: gateway-secret   # cambiar en producción
+    name: "DBS2 Parcial Gateway"
+    redirectURIs:
+      - "http://localhost:3001/callback"   # cambiar por la URL pública al exponer via ngrok
+
+enablePasswordDB: true
+
+staticPasswords:
+  # Generar hash: node -e "const b = require('./gateway/node_modules/bcryptjs'); console.log(b.hashSync('password', 10))"
+  # Generar userID: python3 -c "import uuid; print(uuid.uuid4())"
+  - email: "usuario@comunidad.ub.edu.ar"
+    hash: "$2b$10$HASH_GENERADO_CON_BCRYPT"
+    username: "Nombre Apellido"
+    userID: "uuid-unico-por-usuario"

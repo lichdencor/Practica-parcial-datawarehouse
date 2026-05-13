@@ -14,77 +14,123 @@ En producción (Docker) es compilada por Vite y servida como archivos estáticos
 | TypeScript | 5 | Type safety |
 | Vite | 5 | Dev server + bundler |
 | Tailwind CSS | 3 | Estilos utility-first |
+| React Router | 6 | Enrutamiento SPA |
 | nginx | alpine | Servidor de archivos estáticos (solo Docker) |
 
-Sin librerías de estado global (no Redux, no Zustand). Todo el estado vive en `useState` local o en el hook `useAuth` de `App.tsx`.
+Sin librerías de estado global (no Redux, no Zustand). El estado se maneja con `useState` local y los tres contextos de `App.tsx`.
 
 ---
 
 ## Estructura de archivos
 
 ```
-frontend/
-├── src/
-│   ├── App.tsx                     ← Raíz de la app: auth hook + routing de secciones
-│   ├── vite-env.d.ts               ← Tipos de import.meta.env
-│   ├── index.css                   ← @tailwind directives + utilidades base
-│   │
-│   ├── data/
-│   │   └── questions.ts            ← ÚNICA fuente de verdad del contenido del parcial
-│   │
-│   └── components/
-│       ├── Header.tsx              ← Barra superior con usuario y logout
-│       ├── Login.tsx               ← Pantalla de bienvenida / SSO
-│       ├── MultipleChoiceSection.tsx ← Preguntas de opción múltiple (puntos 1–6)
-│       ├── DwhDiagram.tsx          ← Diagrama SVG de esquema DWH (puntos 7 y 9)
-│       └── SqlShell.tsx            ← Editor SQL + validador de sintaxis (puntos 8 y 10)
+frontend/src/
+├── App.tsx                        ← Raíz: auth hook + tres contextos (User, Progress, Content)
+├── AppRouter.tsx                  ← Rutas SPA, protege /admin con AdminRoute
+├── vite-env.d.ts
+├── index.css
 │
-├── index.html
-├── vite.config.ts
-├── tailwind.config.js
-├── postcss.config.js
-├── tsconfig.json
-├── Dockerfile
-├── nginx.conf
-└── .dockerignore
+├── data/
+│   ├── questions.ts               ← Banco de preguntas del parcial (tipo ExamSection[])
+│   ├── theory.ts                  ← Conceptos teóricos (tipo ConceptCategory[])
+│   └── practice_quick.ts          ← Ejercicios de práctica rápida (tipo QuickPractice[])
+│
+├── components/
+│   ├── Header.tsx                 ← Barra superior: usuario, badge ADM, progreso, logout
+│   ├── Navbar.tsx                 ← Navegación: links + link Admin (solo admins)
+│   ├── Login.tsx                  ← Pantalla de bienvenida / SSO
+│   ├── MultipleChoiceSection.tsx  ← Preguntas de opción múltiple (puntos 1–6)
+│   ├── DwhDiagram.tsx             ← Diagrama SVG de esquema DWH (puntos 7 y 9)
+│   └── SqlShell.tsx               ← Editor SQL + validador de sintaxis (puntos 8 y 10)
+│
+└── pages/
+    ├── Conceptos.tsx              ← /conceptos — cards de teoría por categoría y subgrupo
+    ├── Practica.tsx               ← /practica  — identificación Fact vs Dimension
+    ├── Ejercicios.tsx             ← /ejercicios — grid de acceso directo a cada punto
+    ├── Integrador.tsx             ← /integrador — simulacro completo del parcial
+    └── Admin.tsx                  ← /admin      — panel de roles y editor de contenido (solo admins)
 ```
 
 ---
 
-## Autenticación (`App.tsx → useAuth`)
+## Contextos (`App.tsx`)
+
+`App.tsx` exporta tres contextos que proveen estado global a todos los componentes hijos.
+
+### `UserContext`
+
+```typescript
+export const UserContext = createContext<{
+  user: User         // { sub, email, name, role }
+  isAdmin: boolean   // user.role === 'admin'
+  logout: () => void
+}>()
+```
+
+Disponible en cualquier componente dentro del árbol autenticado. Usado por `Navbar` (mostrar link Admin), `Header` (badge ADM), `AppRouter` (proteger `/admin`), y `Admin.tsx`.
+
+### `ProgressContext`
+
+```typescript
+export const ProgressContext = createContext<{
+  progress: Record<string, any>
+  saveProgress: (key: string, value: any) => void
+  loading: boolean
+}>()
+```
+
+El progreso se carga de MongoDB al iniciar sesión y se sincroniza con cada respuesta. Usado por `MultipleChoiceSection`, `Practica`, y `Header` (barra de progreso).
+
+### `ContentContext`
+
+```typescript
+export const ContentContext = createContext<{
+  questions:     typeof examSections       // ExamSection[]
+  theory:        typeof theoryConcepts     // ConceptCategory[]
+  quickPractice: typeof quickPracticeData  // QuickPractice[]
+  saveContent:   (type, data) => Promise<void>
+}>()
+```
+
+Al montar, `ContentProvider` fetchea los tres tipos de contenido desde `GET /api/content/:type`. Si MongoDB tiene datos para un tipo (editados via panel admin), los usa; si no, usa los datos estáticos del bundle (fallback transparente).
+
+`saveContent` llama a `PUT /api/admin/content/:type` y actualiza el estado local inmediatamente.
+
+---
+
+## Autenticación (`useAuth`)
 
 ```typescript
 const TOKEN_KEY = 'parcial_dbs2_token'     // sessionStorage key
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL
 ```
 
-El hook `useAuth` maneja tres casos en el `useEffect` inicial:
+El hook `useAuth` maneja tres casos al montar:
 
-1. **`?token=JWT` en la URL** — viene del gateway post-login. Lo guarda en `sessionStorage` y limpia la URL con `history.replaceState`.
-2. **`?auth_error=...` en la URL** — Dex rechazó la autenticación. Muestra el error en la pantalla de Login.
-3. **`?logout=true` en la URL** — limpia el token y muestra Login.
+1. **`?token=JWT` en la URL** — viene del gateway post-login. Guarda en `sessionStorage`, limpia la URL.
+2. **`?auth_error=...`** — Dex rechazó la auth. Muestra el error en Login.
+3. **`?logout=true`** — limpia token, muestra Login.
 
-Luego llama a `GET /api/me` con `Authorization: Bearer <token>`. Si el token es válido, guarda el usuario en estado y renderiza el examen. Si falla, limpia el token y vuelve a Login.
+Luego llama a `GET /api/me` con `Authorization: Bearer <token>`. La respuesta incluye `role`, que se propaga al `UserContext`.
 
-**El token vive en `sessionStorage`**: se borra al cerrar la pestaña. No persiste entre sesiones del browser.
+El token vive en `sessionStorage`: se borra al cerrar la pestaña.
 
 ---
 
-## Fuente de datos (`src/data/questions.ts`)
+## Archivos de datos
 
-**Este es el único archivo a editar para cambiar el contenido del parcial.**
+### `src/data/questions.ts` — Preguntas del parcial
 
-Define un array `examSections: ExamSection[]`. Cada sección tiene un `type` que determina qué componente la renderiza:
+Array `examSections: ExamSection[]`. Cada sección tiene un `type` que determina el componente:
 
-### Tipo `multiple-choice`
-
+**`multiple-choice`**
 ```typescript
 {
   id: 1,
   title: 'Punto 1',
   subtitle: 'Diferencia entre OLAP y OLTP',
   type: 'multiple-choice',
-  theory: `...texto con **negritas** soportadas...`,
+  theory: `...texto con **negritas**...`,
   questions: [
     {
       id: 'q1a',
@@ -92,71 +138,85 @@ Define un array `examSections: ExamSection[]`. Cada sección tiene un `type` que
       choices: [
         { id: 'a', text: 'Opción A', correct: false },
         { id: 'b', text: 'Opción correcta', correct: true },
-        // ...
       ],
       explanation: 'Por qué B es correcta...',
     },
-    // ...
   ],
 }
 ```
 
-Solo una opción puede ser `correct: true`. La explicación se muestra después de responder.
-
-### Tipo `dwh-diagram`
-
+**`dwh-diagram`**
 ```typescript
 {
   id: 7,
   type: 'dwh-diagram',
   diagram: {
-    title: '...',
-    description: '...',
     tables: [
-      {
-        name: 'FACT_VENTA_FACTURA',
-        type: 'fact',                  // 'fact' | 'dimension' | 'dimension2'
-        columns: [
-          { name: 'id_venta',      role: 'pk' },      // 'pk' | 'fk' | 'measure' | undefined
-          { name: 'id_producto',   role: 'fk' },
-          { name: 'total_ventas',  role: 'measure' },
-          { name: 'nro_factura' },                    // sin role = atributo normal
-        ],
-        x: 390,   // posición SVG en píxeles
-        y: 250,
-      },
-      // ...
+      { name: 'FACT_VENTA', type: 'fact', columns: [...], x: 390, y: 250 },
     ],
-    connections: [
-      { from: 'FACT_VENTA_FACTURA', to: 'Dim_Producto' },
-      // ...
-    ],
+    connections: [{ from: 'FACT_VENTA', to: 'Dim_Producto' }],
   },
 }
 ```
 
-Las coordenadas `x, y` son absolutas dentro del SVG. El componente calcula automáticamente el `viewBox` basándose en las posiciones de todas las tablas.
-
-### Tipo `sql-shell`
-
+**`sql-shell`**
 ```typescript
 {
   id: 8,
   type: 'sql-shell',
-  theory: 'Descripción general de la sección...',
   sqlExercises: [
     {
       id: 'p8m1',
-      metric: 'Métrica 1: Ventas totales por categoría y marca',
-      description: 'Instrucción detallada de qué calcular...',
-      dimensions: ['Dim_Categoria', 'Dim_Marca', 'Dim_Producto'],   // chips informativos
-      hint: 'Pista para el estudiante...',
-      referenceQuery: `SELECT c.nombre_cat, SUM(vf.total_ventas)...`,
+      metric: 'Métrica 1: ...',
+      description: '...',
+      hint: '...',
+      referenceQuery: `SELECT ...`,
     },
-    // ...
   ],
 }
 ```
+
+### `src/data/theory.ts` — Conceptos teóricos
+
+Estructura jerárquica `ConceptCategory[]`. Cada categoría puede tener conceptos planos o subgrupos:
+
+```typescript
+// Categoría sin subgrupos (lista plana)
+{ category: 'Fundamental', concepts: [{ id, title, content }] }
+
+// Categoría con subgrupos
+{
+  category: 'Modeling',
+  subgroups: [
+    { name: 'Hechos y Dimensiones', concepts: [...] },
+    { name: 'Dimensiones',          concepts: [...] },
+    { name: 'Esquemas',             concepts: [...] },
+  ]
+}
+```
+
+El componente `Conceptos.tsx` renderiza la jerarquía tal como está definida en el JSON — para reorganizar, se mueven bloques, no se cambian tags en items individuales.
+
+### `src/data/practice_quick.ts` — Práctica rápida
+
+Array `QuickPractice[]`: cada item tiene `tableName`, `columns`, `correctType` ('fact' | 'dimension') y `explanation`.
+
+---
+
+## Panel de administración (`/admin`)
+
+Solo accesible para usuarios con `role === 'admin'`. `AppRouter` redirige a `/integrador` si el usuario no es admin.
+
+### Tab Usuarios
+- Lista todos los usuarios registrados en MongoDB con su rol actual.
+- Botón para promover/demotar entre `student` y `admin`.
+- No puede demotar super-admins (definidos en `ADMIN_EMAILS` en el gateway).
+
+### Tab Contenido
+- Editor JSON (textarea monospace) para cada tipo de contenido: `questions`, `theory`, `quickPractice`.
+- Al guardar, el JSON se valida en el browser y se persiste en MongoDB via `PUT /api/admin/content/:type`.
+- El cambio aplica para todos los usuarios en el próximo load de la página.
+- Para restaurar el contenido original, pegar el JSON del archivo `src/data/*.ts` correspondiente.
 
 ---
 
@@ -164,38 +224,15 @@ Las coordenadas `x, y` son absolutas dentro del SVG. El componente calcula autom
 
 ### `MultipleChoiceSection.tsx`
 
-Renderiza el bloque de teoría (con parsing de `**negrita**`) y luego una `QuestionCard` por pregunta.
-
-`QuestionCard` maneja su propio estado local:
-- `selected: string | null` — ID de la opción elegida
-- `showExplanation: boolean` — muestra la explicación post-respuesta
-
-Una vez respondida, la tarjeta es inmutable (no se puede cambiar la respuesta).
+Renderiza el bloque de teoría (con parsing de `**negrita**`) y una `QuestionCard` por pregunta. Una vez respondida, la tarjeta es inmutable.
 
 ### `DwhDiagram.tsx`
 
-Renderiza un SVG puro (sin librerías externas). Funciones clave:
-
-```typescript
-tableHeight(t: DwhTable) → number
-// HEADER_HEIGHT (30) + columns.length * ROW_HEIGHT (22) + PAD (8)
-
-tableCenter(t: DwhTable) → [number, number]
-// centro del rectángulo, usado para los endpoints de las líneas
-```
-
-Las conexiones son líneas (`<line>`) con `strokeDasharray` y un marcador de flecha (`<marker>`). Los colores por `type`:
-- `fact` → `#1a365d` (azul muy oscuro)
-- `dimension` → `#2b6cb0` (azul medio)
-- `dimension2` → `#5a7fa8` (azul claro, para dimensiones de segundo nivel en snowflake)
-
-El `viewBox` se calcula dinámicamente con `Math.min/max` sobre todas las posiciones, más un padding de 20px.
+Renderiza un SVG puro (sin librerías). Calcula el `viewBox` dinámicamente. Altura de tabla: `30 + columnas × 22 + 8` px.
 
 ### `SqlShell.tsx`
 
-Cada `ExerciseShell` tiene su propio estado: `sql` (contenido del textarea), `result` (resultado de validación), `showRef` (visibilidad de la respuesta de referencia).
-
-La función `checkSql(sql: string): SqlResult` aplica estas reglas en orden:
+Validación léxica/estructural con regex. No hay ejecución real. Reglas:
 
 | Regla | Tipo |
 |---|---|
@@ -205,10 +242,7 @@ La función `checkSql(sql: string): SqlResult` aplica estas reglas en orden:
 | `SELECT` sin `FROM` | Error |
 | Más `JOIN` que cláusulas `ON` | Error |
 | `GROUP BY` sin función de agregación | Warning |
-| `ORDER BY` sin `SELECT` | Error |
 | No termina en `;` | Warning |
-
-No hay ejecución real. La validación es puramente léxica/estructural con regex.
 
 ---
 
@@ -217,13 +251,6 @@ No hay ejecución real. La validación es puramente léxica/estructural con rege
 | Variable | Cuándo se aplica | Descripción |
 |---|---|---|
 | `VITE_GATEWAY_URL` | Build time | URL del gateway. Baked en el bundle. Default: `http://localhost:3001` |
-
-Se inyecta como Docker build arg en el `Dockerfile`:
-```dockerfile
-ARG VITE_GATEWAY_URL=http://localhost:3001
-ENV VITE_GATEWAY_URL=$VITE_GATEWAY_URL
-RUN npm run build
-```
 
 ---
 
@@ -235,45 +262,11 @@ npm install
 npm run dev   # http://localhost:5173
 ```
 
-El proxy de Vite reenvía `/login`, `/logout`, `/callback`, `/api` al gateway en `localhost:3001`:
-
-```typescript
-// vite.config.ts
-proxy: {
-  '/api':      'http://localhost:3001',
-  '/login':    'http://localhost:3001',
-  '/logout':   'http://localhost:3001',
-  '/callback': 'http://localhost:3001',
-}
-```
-
-Esto permite que el browser haga todas las peticiones a `:5173` y Vite las proxea, evitando CORS durante el desarrollo.
-
----
-
-## Build de producción
-
-```bash
-npm run build   # tsc + vite build → dist/
-```
-
-Genera en `dist/`:
-- `index.html` (~0.7 KB)
-- `assets/index-*.css` (Tailwind purgado, ~17 KB)
-- `assets/index-*.js` (React + app, ~185 KB, ~58 KB gzip)
-
-El nginx sirve `dist/` con un fallback a `index.html` para el enrutamiento SPA:
-```nginx
-location / {
-    try_files $uri $uri/ /index.html;
-}
-```
+El proxy de Vite reenvía `/login`, `/logout`, `/callback`, `/api` al gateway en `localhost:3001`.
 
 ---
 
 ## Colores del tema
-
-Definidos en `tailwind.config.js` como `colors.ub.*`:
 
 | Token | Hex | Uso |
 |---|---|---|
@@ -281,24 +274,3 @@ Definidos en `tailwind.config.js` como `colors.ub.*`:
 | `ub-mid` | `#2b6cb0` | Hover states, accents, dimension tables |
 | `ub-light` | `#4299e1` | Highlights, bordes activos |
 | `ub-pale` | `#ebf8ff` | Fondos suaves, texto secundario sobre oscuro |
-
----
-
-## Cómo agregar una nueva sección al parcial
-
-1. Abrir `src/data/questions.ts`
-2. Agregar un objeto al array `examSections` con el `id` siguiente en secuencia
-3. Elegir el `type` correcto y completar los campos correspondientes
-4. No es necesario cambiar ningún componente — `App.tsx` renderiza las secciones dinámicamente según el `type`
-
-```typescript
-// Ejemplo: agregar punto 11 de opción múltiple
-{
-  id: 11,
-  title: 'Punto 11',
-  subtitle: 'Nuevo tema',
-  type: 'multiple-choice',
-  theory: `Texto explicativo...`,
-  questions: [/* ... */],
-},
-```

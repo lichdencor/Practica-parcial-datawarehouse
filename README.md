@@ -11,64 +11,76 @@ Cubre los 10 puntos del modelo de parcial 2022 con preguntas interactivas, diagr
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                     Docker Network: parcial-net                         │
 │                                                                         │
-│  ┌──────────────┐   1. /login → redirect    ┌──────────────┐            │
-│  │   Browser    │──────────────────────────▶│     Dex      │            │
-│  └──────┬───────┘                           │  (OIDC IDP)  │            │
-│         │ :5173                             └──────┬───────┘            │
-│  ┌──────▼───────┐   4. ?token=JWT + Cookie         │                    │
-│  │   Frontend   │◀─────────────────────────────────┘                    │
-│  │  React/nginx │          3. Issue JWT                                 │
-│  │   :80→5173   │◀─────────────────────────────────┐                    │
-│  └──────┬───────┘                                  │                    │
-│         │                                   ┌──────▼───────┐            │
-│         │ 5. API Requests (Bearer)          │   Gateway    │            │
-│         └──────────────────────────────────▶│  Express.js  │            │
-│                                             │    :3001     │            │
-│                                             └──────┬───────┘            │
-│                                                    │                    │
-│                                             ┌──────▼───────┐            │
-│                                             │   Progress   │            │
-│                                             │   Service    │            │
-│                                             └──────┬───────┘            │
-│                                                    │                    │
-│                                             ┌──────▼───────┐            │
-│                                             │   MongoDB    │            │
-│                                             └──────────────┘            │
+│  ┌──────────────┐          Single ngrok Tunnel           ┌──────────┐   │
+│  │   Browser    │◀──────────────────────────────────────▶│  ngrok   │   │
+│  └──────┬───────┘            (port 5173)                 └──────────┘   │
+│         │                                                               │
+│  ┌──────▼───────┐                                                       │
+│  │   Frontend   │─── /dex ──────────────────────────────▶┌──────────┐   │
+│  │  (Nginx)     │                                        │   Dex    │   │
+│  │   :5173      │─── /api, /login, /callback ───────────▶│ (OIDC)   │   │
+│  └──────────────┘                                        └──────────┘   │
+│         │                                                       │       │
+│         │                                                ┌──────▼───────┐
+│         │                                                │   Gateway    │
+│         └────────────────────────────────────────────────│  (Express)   │
+│                                                          └──────┬───────┘
+│                                                                 │       │
+│                                                          ┌──────▼───────┐
+│                                                          │   Progress   │
+│                                                          │   Service    │
+│                                                          └──────┬───────┘
+│                                                                 │       │
+│                                                          ┌──────▼───────┐
+│                                                          │   MongoDB    │
+│                                                          └──────────────┘
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 | Servicio | Imagen / Build | Puerto | Rol |
 |---|---|---|---|
 | `parcial-dex` | `dexidp/dex:v2.37.0` | 5556 | OIDC Identity Provider |
-| `parcial-gateway` | `./gateway` (Node 20) | 3001 | OAuth2 callback handler + JWT issuer + API Proxy |
-| `parcial-progress`| `./progress-service` | 3002 | Gestor de progreso de usuarios |
-| `parcial-mongodb` | `mongo:6.0` | — | Base de datos persistente para progreso |
-| `parcial-frontend`| `./frontend` (Vite → nginx) | 5173 | SPA React servida por nginx con redirección de auth |
+| `parcial-gateway` | `./gateway` (Node 20) | 3001 | OAuth2 callback + JWT con rol + API proxy |
+| `parcial-progress` | `./progress-service` | 3002 | Progreso de usuarios + contenido editable |
+| `parcial-mongodb` | `mongo:6.0` | — | Persistencia: progreso, roles, contenido |
+| `parcial-frontend` | `./frontend` (Vite → nginx) | 5173 | SPA React servida por nginx |
 
 ---
 
-## Flujo de autenticación y redirección
+## Flujo de autenticación
 
 ```
 1. Usuario abre http://localhost:5173
 2. Nginx verifica cookie 'auth_token'. Si falta → redirect 302 a /login
-3. Gateway /login → genera state + nonce (CSRF), redirige a localhost:5556/dex/auth?...
+3. Gateway /login → genera state + nonce (CSRF), redirige a Dex
 4. Dex muestra formulario de login
-5. Usuario ingresa credenciales (estudiante@ub.edu.ar / password)
-6. Dex redirige a localhost:3001/callback?code=XXX&state=YYY
+5. Usuario ingresa credenciales
+6. Dex redirige a /callback?code=XXX&state=YYY
 7. Gateway: verifica state, intercambia code→id_token
-8. Gateway: firma JWT propio, establece cookie 'auth_token', redirige a frontend
-9. Frontend guarda JWT en sessionStorage
-10. Frontend llama GET /api/progress para recuperar estado previo de MongoDB
-11. Usuario completa parcial; frontend envía actualizaciones a /api/progress
+8. Gateway: determina rol (ADMIN_EMAILS o MongoDB), sincroniza usuario en MongoDB
+9. Gateway: firma JWT con {sub, email, name, role}, establece cookie 'auth_token'
+10. Frontend: guarda JWT en sessionStorage, carga progreso y contenido de MongoDB
 ```
 
-**Nginx Redirect:**  
-Nginx protege la aplicación SPA. Si la cookie `auth_token` no está presente, el usuario es enviado al flujo de login antes de poder ver cualquier contenido del parcial.
+---
 
-**Por qué dos URLs para Dex:**  
-El issuer público (`localhost:5556`) es la URL que ve el browser.  
-El intercambio de código sucede dentro de Docker, donde el gateway llama al hostname interno `dex:5556`. Esto evita exponer el client_secret al browser y resuelve el problema de networking sin un proxy adicional.
+## Sistema de roles
+
+Los usuarios tienen rol `student` (default) o `admin`.
+
+**Super-admins:** definidos en la variable de entorno `ADMIN_EMAILS` del gateway. Su rol se fuerza a `admin` en cada login y no puede ser modificado desde el panel.
+
+**Admins promovidos:** cualquier admin puede promover a otro usuario desde el panel `/admin` → tab Usuarios. Los cambios persisten en MongoDB.
+
+El rol queda grabado en el JWT al momento del login. Cambios de rol requieren re-login para reflejarse.
+
+---
+
+## Contenido editable
+
+Los datos del parcial (preguntas, teoría, práctica) están definidos en archivos TypeScript (`src/data/*.ts`) que sirven como **fallback estático**. Un admin puede editar el contenido desde el panel `/admin` → tab Contenido, y los cambios se persisten en MongoDB con prioridad sobre los datos estáticos.
+
+Para restaurar el contenido original de una sección, pegar el JSON del archivo TS correspondiente en el editor del panel.
 
 ---
 
@@ -82,11 +94,8 @@ El intercambio de código sucede dentro de Docker, donde el gateway llama al hos
 ### Levantar todo
 
 ```bash
-# Desde la raíz del proyecto
 docker compose up -d
-
-# Verificar que los tres containers estén Up
-docker compose ps
+docker compose ps   # todos deben mostrar "Up"
 ```
 
 ### Acceder
@@ -101,11 +110,9 @@ docker compose ps
 
 ## Exposición pública (ngrok)
 
-Para permitir que alumnos remotos accedan a la app sin configurar nada en sus máquinas:
-
-1. Asegúrate de tener `ngrok` instalado.
-2. Ejecuta `./expose.sh`.
-3. Comparte la URL generada.
+```bash
+./expose.sh
+```
 
 Ver [EXPOSURE.md](./EXPOSURE.md) para más detalles.
 
@@ -114,7 +121,8 @@ Ver [EXPOSURE.md](./EXPOSURE.md) para más detalles.
 ## Detener
 
 ```bash
-docker compose down
+docker compose down        # conserva datos de MongoDB
+docker compose down -v     # ⚠️ borra también el volumen mongo-data
 ```
 
 ### Rebuild tras cambios
@@ -150,61 +158,74 @@ docker compose build && docker compose up -d
 
 ```
 modelo-parcial/
-├── AGENTS.md                   ← Directrices para agentes de IA
-├── README.md                   ← Este archivo
+├── AGENTS.md                    ← Directrices para agentes de IA
+├── README.md                    ← Este archivo
 ├── docker-compose.yml
 │
 ├── dex/
 │   ├── README.md
-│   └── config.yaml             ← Configuración del IDP
+│   └── config.yaml              ← Configuración del IDP (usuarios, client)
 │
 ├── gateway/
-│   ├── README.md
-│   ├── Dockerfile
-│   ├── index.js                ← Servidor Express (único archivo)
+│   ├── README.md                ← API, roles, variables de entorno
+│   ├── index.js                 ← Servidor Express (~200 líneas)
+│   └── package.json
+│
+├── progress-service/
+│   ├── README.md                ← Esquemas MongoDB, endpoints
+│   ├── index.js                 ← Express + Mongoose (~100 líneas)
 │   └── package.json
 │
 └── frontend/
-    ├── README.md
+    ├── README.md                ← Contextos, datos, componentes
     ├── Dockerfile
     ├── nginx.conf
     ├── vite.config.ts
-    ├── tailwind.config.js
     └── src/
-        ├── App.tsx             ← Raíz: auth hook + router de secciones
+        ├── App.tsx              ← Auth + UserContext + ProgressContext + ContentContext
+        ├── AppRouter.tsx        ← Rutas SPA + protección /admin
         ├── data/
-        │   └── questions.ts    ← TODO el contenido del parcial
-        └── components/
-            ├── Header.tsx
-            ├── Login.tsx
-            ├── MultipleChoiceSection.tsx
-            ├── DwhDiagram.tsx
-            └── SqlShell.tsx
+        │   ├── questions.ts     ← Preguntas del parcial (fallback estático)
+        │   ├── theory.ts        ← Conceptos teóricos jerárquicos (fallback estático)
+        │   └── practice_quick.ts← Práctica rápida (fallback estático)
+        ├── components/
+        │   ├── Header.tsx
+        │   ├── Navbar.tsx
+        │   ├── Login.tsx
+        │   ├── MultipleChoiceSection.tsx
+        │   ├── DwhDiagram.tsx
+        │   └── SqlShell.tsx
+        └── pages/
+            ├── Conceptos.tsx
+            ├── Practica.tsx
+            ├── Ejercicios.tsx
+            ├── Integrador.tsx
+            └── Admin.tsx        ← Panel de roles y editor de contenido
 ```
 
 ---
 
 ## Variables de entorno
 
-### Gateway (`docker-compose.yml` → service `gateway`)
+### Gateway (`docker-compose.yml`)
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `PORT` | `3001` | Puerto del servidor |
-| `SESSION_SECRET` | — | Secreto para firmar el JWT de sesión. **Cambiar en producción.** |
-| `OIDC_ISSUER` | `http://localhost:5556/dex` | URL pública del IDP (la que ve el browser) |
-| `OIDC_INTERNAL_URL` | `http://dex:5556/dex` | URL interna Docker para el token exchange |
+| `SESSION_SECRET` | — | Secreto para firmar el JWT de sesión |
+| `OIDC_ISSUER` | `http://localhost:5556/dex` | URL pública del IDP |
+| `OIDC_INTERNAL_URL` | `http://dex:5556/dex` | URL interna Docker para token exchange |
 | `OIDC_CLIENT_ID` | `gateway-client` | Client ID registrado en Dex |
-| `OIDC_CLIENT_SECRET` | `gateway-secret` | Client secret registrado en Dex |
-| `OIDC_CALLBACK_URL` | `http://localhost:3001/callback` | Redirect URI registrada en Dex |
-| `FRONTEND_URL` | `http://localhost:5173` | URL del frontend (destino del redirect post-login) |
-| `PROGRESS_SERVICE_URL`| `http://progress:3002` | URL del servicio de progreso |
+| `OIDC_CLIENT_SECRET` | `gateway-secret` | Client secret |
+| `OIDC_CALLBACK_URL` | `http://localhost:3001/callback` | Redirect URI |
+| `FRONTEND_URL` | `http://localhost:5173` | URL del frontend |
+| `PROGRESS_SERVICE_URL` | `http://progress:3002` | URL del progress service |
+| `ADMIN_EMAILS` | `""` | Super-admins separados por coma |
 
 ### Frontend (`docker-compose.yml` → build arg)
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `VITE_GATEWAY_URL` | `http://localhost:3001` | URL del gateway (baked en el bundle en build time) |
+| `VITE_GATEWAY_URL` | `http://localhost:5173` | URL del gateway (baked en build) |
 
 ---
 
@@ -213,11 +234,8 @@ modelo-parcial/
 Editar `dex/config.yaml`. El hash es bcrypt cost-10:
 
 ```bash
-# Generar hash para una nueva contraseña
 node -e "const b = require('./gateway/node_modules/bcryptjs'); console.log(b.hashSync('nueva-clave', 10))"
 ```
-
-Luego agregar en `dex/config.yaml`:
 
 ```yaml
 staticPasswords:
@@ -229,17 +247,23 @@ staticPasswords:
 
 Reiniciar Dex: `docker compose restart dex`
 
-> Dex usa almacenamiento en memoria (`storage: type: memory`). Todos los datos se pierden al reiniciar.
+Para hacer admin a un usuario nuevo, agregar su email a `ADMIN_EMAILS` en `docker-compose.yml` (super-admin) o promoverlo desde el panel `/admin` después de su primer login.
 
 ---
 
 ## Decisiones de diseño
 
-**¿Por qué JWT propio del gateway en lugar de usar el id_token de Dex directamente?**  
-El id_token de Dex contiene el issuer `http://localhost:5556/dex`. Validarlo en el gateway requeriría acceso al JWKS endpoint. En cambio, el gateway emite su propio JWT firmado con `SESSION_SECRET`, lo que simplifica la validación en `/api/me` y desacopla el frontend de Dex.
+**¿Por qué JWT propio del gateway con rol incluido?**  
+El id_token de Dex no incluye el rol de la app. El gateway firma su propio JWT con `SESSION_SECRET` incluyendo `role`, lo que permite que el frontend y los endpoints admin conozcan el rol sin consultar la DB en cada request.
+
+**¿Por qué el rol en el JWT y no consultarlo en cada request?**  
+Simplicidad. Para una app de estudio con pocos usuarios, el costo de un JWT expirado con rol desactualizado es mínimo. Mitigación: el JWT expira en 8h, forzando re-login diario.
 
 **¿Por qué cookies + sessionStorage?**  
-Se utiliza la cookie `auth_token` exclusivamente para que Nginx pueda realizar la redirección al login de forma eficiente sin cargar la SPA. El frontend sigue usando el token en `sessionStorage` y enviándolo como `Bearer` en los headers para simplificar la compatibilidad con el gateway y evitar problemas de CSRF en las mutaciones de progreso.
+La cookie `auth_token` permite que Nginx valide la sesión sin cargar la SPA. El frontend usa el token desde `sessionStorage` como Bearer header. `sessionStorage` borra el token al cerrar la pestaña.
 
 **¿Por qué el SQL shell no ejecuta contra una base real?**  
-El objetivo es practicar la escritura de queries para el parcial, no ejecutarlas. Un validador de sintaxis basado en reglas es suficiente y evita la complejidad de provisionar una base de datos, seeds y permisos.
+El objetivo es practicar escritura de queries para el parcial. Un validador de sintaxis es suficiente y evita la complejidad de provisionar una DB con seeds.
+
+**¿Por qué el contenido editable en MongoDB y no en archivos?**  
+Los archivos TS requieren rebuild y redeploy para cada cambio. MongoDB permite que el profesor actualice preguntas o explicaciones desde el panel `/admin` sin tocar código ni reiniciar containers.

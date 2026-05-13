@@ -14,6 +14,8 @@ const CLIENT_ID = process.env.OIDC_CLIENT_ID || 'gateway-client';
 const CLIENT_SECRET = process.env.OIDC_CLIENT_SECRET || 'gateway-secret';
 const CALLBACK_URL = process.env.OIDC_CALLBACK_URL || 'http://localhost:3001/callback';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const PROGRESS_SERVICE_URL = process.env.PROGRESS_SERVICE_URL || 'http://localhost:3002';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
 // In-memory state store (state → nonce mapping for CSRF protection)
 const pendingStates = new Map();
@@ -62,7 +64,6 @@ app.get('/callback', async (req, res) => {
     return res.redirect(`${FRONTEND_URL}?auth_error=invalid_state`);
   }
 
-  const { nonce } = pendingStates.get(state);
   pendingStates.delete(state);
 
   try {
@@ -83,43 +84,49 @@ app.get('/callback', async (req, res) => {
     );
 
     const { id_token } = tokenResponse.data;
-
-    // Decode the ID token (we trust Dex in this internal setup)
     const claims = jwt.decode(id_token);
 
     if (!claims) {
       return res.redirect(`${FRONTEND_URL}?auth_error=invalid_token`);
     }
 
-    // Issue our own session token so the frontend can authenticate API calls
+    // Determine role: super-admins (in ADMIN_EMAILS) always get 'admin'
+    const isSuperAdmin = ADMIN_EMAILS.includes(claims.email);
+    const registrationBody = {
+      email: claims.email,
+      name: claims.name || claims.preferred_username || claims.email,
+    };
+    if (isSuperAdmin) registrationBody.role = 'admin';
+
+    // Register/update user in progress service (upsert — role is only set on insert for non-super-admins)
+    let userRole = 'student';
+    try {
+      const regResponse = await axios.post(
+        `${PROGRESS_SERVICE_URL}/progress/${claims.sub}`,
+        registrationBody
+      );
+      userRole = regResponse.data.role || 'student';
+      console.log(`User ${claims.email} synced to progress service with role "${userRole}"`);
+    } catch (regErr) {
+      console.error('Failed to sync user in progress service:', regErr.message);
+      if (isSuperAdmin) userRole = 'admin';
+    }
+
     const sessionToken = jwt.sign(
       {
         sub: claims.sub,
         email: claims.email,
         name: claims.name || claims.preferred_username || claims.email,
+        role: userRole,
       },
       SESSION_SECRET,
       { expiresIn: '8h' }
     );
 
-    // Register/Update user in progress service (MongoDB) upon login
-    try {
-      await axios.post(`${PROGRESS_SERVICE_URL}/progress/${claims.sub}`, {
-        email: claims.email,
-        name: claims.name || claims.preferred_username || claims.email,
-        // We don't send 'progress' here to avoid overwriting existing progress on login
-      });
-      console.log(`User ${claims.email} registered/updated in progress service`);
-    } catch (regErr) {
-      console.error('Failed to register user in progress service:', regErr.message);
-      // We don't block the login if this fails, but we log it
-    }
-
-    // Set auth_token cookie for Nginx and frontend
     res.cookie('auth_token', sessionToken, {
-      httpOnly: false, // Accessible by frontend JS if needed
+      httpOnly: false,
       path: '/',
-      maxAge: 8 * 60 * 60 * 1000 // 8 hours
+      maxAge: 8 * 60 * 60 * 1000
     });
 
     res.redirect(`${FRONTEND_URL}?token=${encodeURIComponent(sessionToken)}`);
@@ -129,44 +136,49 @@ app.get('/callback', async (req, res) => {
   }
 });
 
-// Return current user info (token comes as Authorization: Bearer <token>)
-app.get('/api/me', (req, res) => {
+// --- Middleware ---
+
+function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'No token provided' });
   }
-
-  const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, SESSION_SECRET);
-    res.json({
-      sub: payload.sub,
-      email: payload.email,
-      name: payload.name,
-    });
+    req.user = jwt.verify(authHeader.slice(7), SESSION_SECRET);
+    next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
+
+// Return current user info
+app.get('/api/me', verifyToken, (req, res) => {
+  res.json({
+    sub: req.user.sub,
+    email: req.user.email,
+    name: req.user.name,
+    role: req.user.role || 'student',
+  });
 });
 
-// Logout — clear cookie and instruct the frontend to drop the token
+// Logout
 app.get('/logout', (req, res) => {
   res.clearCookie('auth_token');
   res.redirect(`${FRONTEND_URL}?logout=true`);
 });
 
-// --- Progress Endpoints ---
+// --- Progress endpoints ---
 
-app.get('/api/progress', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-
-  const token = authHeader.slice(7);
+app.get('/api/progress', verifyToken, async (req, res) => {
   try {
-    const payload = jwt.verify(token, SESSION_SECRET);
-    const response = await axios.get(`${PROGRESS_SERVICE_URL}/progress/${payload.sub}`);
+    const response = await axios.get(`${PROGRESS_SERVICE_URL}/progress/${req.user.sub}`);
     res.json(response.data);
   } catch (err) {
     console.error('Error fetching progress:', err.message);
@@ -174,18 +186,11 @@ app.get('/api/progress', async (req, res) => {
   }
 });
 
-app.post('/api/progress', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-
-  const token = authHeader.slice(7);
+app.post('/api/progress', verifyToken, async (req, res) => {
   try {
-    const payload = jwt.verify(token, SESSION_SECRET);
-    const response = await axios.post(`${PROGRESS_SERVICE_URL}/progress/${payload.sub}`, {
-      email: payload.email,
-      name: payload.name,
+    const response = await axios.post(`${PROGRESS_SERVICE_URL}/progress/${req.user.sub}`, {
+      email: req.user.email,
+      name: req.user.name,
       progress: req.body.progress
     });
     res.json(response.data);
@@ -195,9 +200,66 @@ app.post('/api/progress', async (req, res) => {
   }
 });
 
+// --- Content endpoints (public read, admin write) ---
+
+app.get('/api/content/:type', verifyToken, async (req, res) => {
+  try {
+    const response = await axios.get(`${PROGRESS_SERVICE_URL}/content/${req.params.type}`);
+    res.json(response.data);
+  } catch (err) {
+    console.error('Error fetching content:', err.message);
+    res.status(err.response?.status || 500).json({ error: 'Failed to fetch content' });
+  }
+});
+
+app.put('/api/admin/content/:type', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.put(`${PROGRESS_SERVICE_URL}/content/${req.params.type}`, {
+      data: req.body.data,
+      updatedBy: req.user.email,
+    });
+    res.json(response.data);
+  } catch (err) {
+    console.error('Error saving content:', err.message);
+    res.status(err.response?.status || 500).json({ error: 'Failed to save content' });
+  }
+});
+
+// --- Admin user management endpoints ---
+
+app.get('/api/admin/users', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${PROGRESS_SERVICE_URL}/users`);
+    res.json(response.data);
+  } catch (err) {
+    console.error('Error fetching users:', err.message);
+    res.status(err.response?.status || 500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.put('/api/admin/users/:userId/role', verifyToken, requireAdmin, async (req, res) => {
+  // Prevent demoting a super-admin via the panel
+  const targetUserId = req.params.userId;
+  try {
+    const userRes = await axios.get(`${PROGRESS_SERVICE_URL}/users`);
+    const targetUser = userRes.data.find(u => u.userId === targetUserId);
+    if (targetUser && ADMIN_EMAILS.includes(targetUser.email) && req.body.role !== 'admin') {
+      return res.status(400).json({ error: 'Cannot demote a super-admin' });
+    }
+    const response = await axios.put(`${PROGRESS_SERVICE_URL}/users/${targetUserId}/role`, {
+      role: req.body.role,
+    });
+    res.json(response.data);
+  } catch (err) {
+    console.error('Error updating user role:', err.message);
+    res.status(err.response?.status || 500).json({ error: 'Failed to update role' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Gateway running on port ${PORT}`);
   console.log(`OIDC Issuer (browser): ${OIDC_ISSUER}`);
   console.log(`OIDC Internal URL:     ${OIDC_INTERNAL_URL}`);
   console.log(`Frontend URL:          ${FRONTEND_URL}`);
+  console.log(`Admin emails:          ${ADMIN_EMAILS.join(', ') || '(none)'}`);
 });

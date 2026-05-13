@@ -7,9 +7,9 @@ Leer antes de tocar código. Actualizar si se toman decisiones que contradigan l
 
 ## 1. Qué es este proyecto
 
-App de repaso del modelo de parcial 2022 de Base de Datos II (UB). Tres containers Docker: un OIDC Identity Provider (Dex), un gateway Express que maneja el callback OAuth2, y un frontend React que sirve 10 secciones interactivas del parcial.
+App de repaso del modelo de parcial 2022 de Base de Datos II (UB). Cinco containers Docker: un OIDC Identity Provider (Dex), un gateway Express que maneja el callback OAuth2 y emite JWTs con rol, un progress service que persiste progreso y contenido en MongoDB, una base MongoDB, y un frontend React que sirve 10 secciones interactivas del parcial.
 
-No es una app de producción. Es una herramienta local de estudio. Las decisiones de diseño priorizan simplicidad y velocidad de iteración sobre seguridad o escalabilidad.
+No es una app de producción. Es una herramienta local de estudio. Las decisiones de diseño priorizan simplicidad y velocidad de iteración.
 
 ---
 
@@ -20,10 +20,11 @@ No es una app de producción. Es una herramienta local de estudio. Las decisione
 Antes de editar cualquier archivo:
 
 ```
-README.md              ← arquitectura general y decisiones de diseño
-gateway/README.md      ← API, flujo OIDC, variables de entorno
-dex/README.md          ← configuración del IDP, cómo agregar usuarios
-frontend/README.md     ← estructura del frontend, cómo extender el contenido
+README.md                  ← arquitectura general y decisiones de diseño
+gateway/README.md          ← API, flujo OIDC, roles, variables de entorno
+dex/README.md              ← configuración del IDP, cómo agregar usuarios
+progress-service/README.md ← esquemas MongoDB, endpoints internos
+frontend/README.md         ← estructura del frontend, contextos, cómo extender contenido
 ```
 
 Si el README no menciona algo que estás a punto de cambiar, preguntá antes de implementar.
@@ -32,22 +33,23 @@ Si el README no menciona algo que estás a punto de cambiar, preguntá antes de 
 
 | Dominio | Archivo canónico |
 |---|---|
-| Contenido del parcial (preguntas, diagramas, queries) | `frontend/src/data/questions.ts` |
-| Configuración del IDP (usuarios, clientes) | `dex/config.yaml` |
-| Lógica del gateway (endpoints, auth flow) | `gateway/index.js` |
-| Persistencia de progreso | `progress-service/index.js` |
-| Variables de entorno | `docker-compose.yml` |
-| Estilos y colores | `frontend/tailwind.config.js` + `src/index.css` |
+| Preguntas del Parcial | `frontend/src/data/questions.ts` |
+| Teoría y Conceptos | `frontend/src/data/theory.ts` |
+| Práctica Rápida | `frontend/src/data/practice_quick.ts` |
+| Configuración del IDP | `dex/config.yaml` |
+| Lógica del gateway | `gateway/index.js` |
+| Lógica del progress service | `progress-service/index.js` |
+| Infraestructura ngrok | `expose.sh` |
 
-Nunca duplicar configuración entre archivos. Si hay que cambiar una URL, hay un solo lugar donde hacerlo.
+Los archivos `src/data/*.ts` son el fallback estático. El contenido real en runtime puede venir de MongoDB si un admin lo editó via el panel `/admin`.
 
 ### 2.3 Scope mínimo
 
-No refactorizar código que no tiene relación con la tarea pedida. No agregar abstracciones preventivas. Si la tarea es "agregar una pregunta al punto 3", solo tocar `questions.ts`. No reorganizar los imports ni renombrar variables.
+No refactorizar código que no tiene relación con la tarea pedida. Si la tarea es "agregar una pregunta al punto 3", solo tocar `questions.ts`. No reorganizar imports ni renombrar variables.
 
 ### 2.4 Verificar antes de reportar como hecho
 
-Para cambios en el gateway o dex:
+Para cambios en el gateway, progress service o dex:
 ```bash
 docker compose up -d --build <servicio>
 curl http://localhost:3001/health
@@ -63,46 +65,75 @@ Si el build falla, no reportar la tarea como completada.
 
 ---
 
-## 3. Guía por tipo de tarea
+## 3. Infraestructura Unificada (Single Tunnel)
+
+El proyecto utiliza un túnel único de ngrok apuntando al puerto **5173**. Nginx (frontend) gestiona todas las rutas:
+- `/dex/*` → Proxea al contenedor `dex`
+- `/api/*`, `/login`, `/callback` → Proxea al contenedor `gateway`
+- Otros → Sirve la SPA React
+
+**Regla de Oro:** No intentar abrir múltiples túneles. Si cambia la URL pública, el script `expose.sh` se encarga de reconfigurar Dex y el Gateway automáticamente.
+
+---
+
+## 4. Guía por tipo de tarea
 
 ### Agregar o editar preguntas de opción múltiple
 
 **Archivo:** `frontend/src/data/questions.ts`
 
-Solo una `Choice` puede tener `correct: true`. Verificar que la `explanation` sea informativa: debe explicar *por qué* la respuesta es correcta, no solo afirmarlo.
+Solo una `Choice` puede tener `correct: true`. La `explanation` debe explicar *por qué* la respuesta es correcta, no solo afirmarlo.
 
 ```typescript
-// Plantilla
 {
-  id: 'q1d',                                    // formato: qNletra
+  id: 'q1d',
   text: '¿Pregunta clara y sin ambigüedad?',
   choices: [
     { id: 'a', text: 'Opción incorrecta', correct: false },
     { id: 'b', text: 'Opción correcta',   correct: true  },
     { id: 'c', text: 'Distractor plausible', correct: false },
-    { id: 'd', text: 'Otro distractor',   correct: false },
   ],
-  explanation: 'B es correcta porque... [referencia al concepto del libro/apunte]',
+  explanation: 'B es correcta porque...',
 }
 ```
+
+### Agregar o editar conceptos teóricos
+
+**Archivo:** `frontend/src/data/theory.ts`
+
+La estructura es `ConceptCategory[]` — jerárquica, no una lista plana.
+
+```typescript
+// Para agregar un concepto a un subgrupo existente:
+// → localizar el subgroup correcto y agregar al array concepts[]
+
+// Para agregar una nueva categoría sin subgrupos:
+{ category: 'Nueva', concepts: [{ id, title, content }] }
+
+// Para agregar una categoría con subgrupos:
+{
+  category: 'Nueva',
+  subgroups: [
+    { name: 'SubA', concepts: [...] },
+    { name: 'SubB', concepts: [...] },
+  ]
+}
+```
+
+El `content` soporta `**negritas**` — el componente `ConceptCard` parsea `**texto**` a `<strong>`.
 
 ### Modificar un diagrama DWH
 
 **Archivo:** `frontend/src/data/questions.ts` — sección con `type: 'dwh-diagram'`
 
-Las coordenadas `x, y` son absolutas en píxeles SVG. El componente calcula el `viewBox` automáticamente, así que las tablas pueden estar en coordenadas negativas sin problema.
+Las coordenadas `x, y` son absolutas en píxeles SVG. El componente calcula el `viewBox` automáticamente.
 
 Reglas de layout:
-- Tabla FACT en el centro visual del diagrama
-- Dimensiones de primer nivel a 180–250px de distancia del centro
-- Dimensiones de segundo nivel (snowflake) más alejadas, conectadas a la dimensión padre, no a la FACT
+- Tabla FACT en el centro visual
+- Dimensiones de primer nivel a 180–250px del centro
+- Dimensiones de segundo nivel más alejadas, conectadas a la dimensión padre
 
-Para no superponer tablas, calcular la altura antes de posicionar:
-```
-altura_tabla = 30 (header) + columnas.length × 22 + 8 (padding)
-```
-
-Verificar visualmente corriendo `npm run dev` y navegando al punto del diagrama.
+Altura de tabla: `30 (header) + columnas × 22 + 8 (padding)` px.
 
 ### Editar el SQL shell
 
@@ -110,68 +141,73 @@ Verificar visualmente corriendo `npm run dev` y navegando al punto del diagrama.
 - Datos: `frontend/src/data/questions.ts` → `sqlExercises[]`
 - Lógica de validación: `frontend/src/components/SqlShell.tsx` → función `checkSql`
 
-Para agregar una nueva regla de validación, agregarla en `checkSql`. Seguir el patrón existente: errores bloquean (campo `errors`), advertencias no bloquean (campo `warnings`). No usar AST parsers externos — el validador es intencionalmente simple (regex + conteo).
-
-Las `referenceQuery` deben ser PostgreSQL-compatible y seguir el estilo de indentación existente (keywords en UPPERCASE, aliases en lowercase).
+Errores bloquean (`errors`), advertencias no bloquean (`warnings`). No usar AST parsers externos.
 
 ### Agregar un usuario a Dex
 
 Ver `dex/README.md → "Añadir usuarios"`. Pasos:
-1. Generar hash bcrypt con `node -e "..."` (comando en el README)
-2. Editar `dex/config.yaml` con el nuevo entry en `staticPasswords`
+1. Generar hash bcrypt
+2. Editar `dex/config.yaml`
 3. `docker compose restart dex`
-4. Verificar que el login funciona en `http://localhost:5173`
 
-No editar el `userID` de usuarios existentes — aunque el storage es en memoria, es un identificador estable.
+### Agregar un admin
 
-### Cambiar variables de entorno del gateway
+Dos formas:
+1. **Super-admin permanente:** agregar el email a `ADMIN_EMAILS` en `docker-compose.yml`, reiniciar gateway.
+2. **Admin promovido:** loguearse como admin, ir a `/admin` → tab Usuarios → "Hacer admin".
 
-Las variables van en `docker-compose.yml` bajo `services.gateway.environment`.  
-Después de cambiarlas: `docker compose up -d --build gateway`.
-
-No hardcodear valores que deberían ser variables de entorno en `gateway/index.js`. Toda configuración externa va por env var.
+Los super-admins no pueden ser degradados desde el panel.
 
 ### Agregar un endpoint al gateway
 
 1. Agregar la ruta en `gateway/index.js` siguiendo el patrón existente
-2. Documentar el nuevo endpoint en `gateway/README.md` → tabla de endpoints
-3. Si el endpoint es llamado desde el frontend, agregar el proxy en `frontend/vite.config.ts`
+2. Documentar en `gateway/README.md` → tabla de endpoints
+3. Si requiere autenticación: encadenar `verifyToken`; si es solo para admins: encadenar también `requireAdmin`
+
+### Editar contenido editable (via admin panel)
+
+Los datos en `src/data/*.ts` son el fallback estático. Los cambios hechos desde el panel `/admin` se persisten en MongoDB y tienen prioridad sobre los datos estáticos.
+
+Para restaurar el contenido original de un tipo, copiar el JSON del archivo TS correspondiente y pegarlo en el editor del panel admin.
 
 ### Cambios en el Dockerfile o docker-compose
 
-Siempre hacer `docker compose build` completo y verificar que los tres containers levantan:
+Siempre verificar que los containers levantan:
 ```bash
 docker compose build
 docker compose up -d
-docker compose ps   # los tres deben mostrar "Up"
+docker compose ps   # todos deben mostrar "Up"
 curl http://localhost:3001/health
 ```
 
 ---
 
-## 4. Lo que no hacer
+## 5. Lo que no hacer
 
 **No agregar una base de datos real para el SQL shell.**  
-El diseño intencional es que el shell valide sintaxis sin ejecutar. Agregar PostgreSQL requeriría seeds, permisos, y complica el setup sin agregar valor educativo para el parcial.
+El shell valida sintaxis sin ejecutar. Agregar PostgreSQL complica el setup sin agregar valor educativo.
 
 **No mover el token de `sessionStorage` a `localStorage`.**  
-`sessionStorage` borra el token al cerrar la pestaña, que es el comportamiento correcto para una app de examen local. `localStorage` persistiría el token indefinidamente.
+`sessionStorage` borra el token al cerrar la pestaña — comportamiento correcto para una app de examen.
 
 **No usar `jwt.verify` con el id_token de Dex en el gateway actual.**  
-El gateway usa `jwt.decode` (sin verificar firma) intencionalmente. Verificar la firma requiere acceder al JWKS endpoint con una URL que puede no resolver correctamente desde dentro del container. Si se cambia esto, leer primero `dex/README.md → "Notas sobre issuer y red Docker"`.
+El gateway usa `jwt.decode` (sin verificar firma) intencionalmente. Ver `dex/README.md → "Notas sobre issuer y red Docker"`.
 
 **No agregar librerías de estado global (Redux, Zustand, Jotai).**  
-El estado de la app es suficientemente simple para `useState` local en cada componente. Si una sección necesita comunicarse con otra, usar props o context de React.
+El estado se maneja con los tres contextos de `App.tsx`: `UserContext`, `ProgressContext`, `ContentContext`.
 
 **No modificar `tailwind.config.js` content array.**  
-El array `content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}']` controla qué clases Tailwind se incluyen en el bundle. Modificarlo mal puede hacer que clases usadas en el código queden fuera del CSS de producción.
+Controla qué clases Tailwind se incluyen en el bundle.
 
 **No hacer `docker compose down -v`.**  
-El flag `-v` borra los volúmenes. Aunque Dex usa memoria, otros contenedores futuros podrían tener datos importantes. Usar simplemente `docker compose down`.
+El flag `-v` borra los volúmenes, incluyendo los datos de MongoDB.
+
+**No saltear la verificación de rol en endpoints admin.**  
+Todo endpoint bajo `/api/admin/*` debe encadenar `verifyToken` + `requireAdmin`.
 
 ---
 
-## 5. Herramientas disponibles en el entorno
+## 6. Herramientas disponibles en el entorno
 
 ```bash
 node --version    # v25.9.0
@@ -180,82 +216,81 @@ docker --version  # 29.4.3
 pdftotext         # para extraer texto del PDF del parcial
 ```
 
-`pandoc` no puede leer PDFs como input (solo output). Usar `pdftotext` para extraer el contenido del PDF fuente.
-
 ---
 
-## 6. Verificaciones de salud del sistema
+## 7. Verificaciones de salud del sistema
 
 ```bash
-# Los tres containers deben estar Up
+# Todos los containers deben estar Up
 docker compose ps
 
 # Gateway responde
 curl http://localhost:3001/health
 # → {"status":"ok"}
 
-# Dex tiene el discovery document
+# Progress service
+curl http://localhost:3002/health   # interno, requiere estar dentro de la red o exponer el puerto
+# → {"status":"ok"}
+
+# Dex discovery
 curl http://localhost:5556/dex/.well-known/openid-configuration | python3 -c "import json,sys; print(json.load(sys.stdin)['issuer'])"
 # → http://localhost:5556/dex
 
-# Frontend sirve la app
+# Frontend
 curl -s http://localhost:5173 | grep -o '<title>.*</title>'
-# → <title>DBS2 — Modelo de Parcial 2022</title>
-
-# El flujo de login genera el redirect correcto
-curl -sI http://localhost:3001/login | grep Location
-# → Location: http://localhost:5556/dex/auth?response_type=code&...
+# → <title>DBS2 — Modelo Parcial 2022</title>
 ```
 
 ---
 
-## 7. Convenciones de código
+## 8. Convenciones de código
 
 ### TypeScript (frontend)
 
 - Interfaces en `PascalCase`, props con tipos explícitos (no `any`)
+- Contextos exportados desde `App.tsx`: `UserContext`, `ProgressContext`, `ContentContext`
 - Componentes: funciones nombradas exportadas como `default` al final del archivo
-- Datos: tipos e interfaces primero, luego la constante `examSections`
-- No usar `!` (non-null assertion) si se puede evitar con un early return o guardado
+- Datos: tipos e interfaces primero, luego las constantes exportadas
 
 ### JavaScript (gateway)
 
 - `const` por defecto, `let` solo si la variable se reasigna
-- Funciones async con `try/catch` explícito — nunca dejar una promesa sin manejar
+- Funciones async con `try/catch` explícito
 - Variables de entorno: todas extraídas al inicio del archivo como constantes nombradas
+- Middleware en cadena: `app.route(path, verifyToken, requireAdmin, handler)`
 
 ### CSS / Tailwind
 
 - Clases de layout primero, luego tipografía, luego colores, luego interacción
-- Usar los tokens `ub-*` del tema para consistencia, no valores hex directos
+- Usar los tokens `ub-*` del tema para consistencia
 - Responsive: mobile-first con `sm:`, `md:` como modificadores
 
 ### YAML (Dex)
 
-- Comentarios en inglés o español, consistente con el resto del archivo
-- Strings con caracteres especiales entre comillas dobles
 - No usar `yes/no` para booleanos, usar `true/false`
+- Strings con caracteres especiales entre comillas dobles
 
 ---
 
-## 8. Preguntas frecuentes para agentes
-
-**¿Cómo sé qué port usa cada servicio?**  
-Ver `docker-compose.yml` → `ports` de cada servicio. Formato: `HOST:CONTAINER`.
+## 9. Preguntas frecuentes para agentes
 
 **¿Dónde está el contenido del parcial?**  
-Todo en `frontend/src/data/questions.ts`. Es el único archivo de datos.
+En `frontend/src/data/questions.ts`. Si un admin editó algo via el panel, la versión live está en MongoDB (colección `contents`).
 
-**¿Por qué hay dos URLs para Dex (`OIDC_ISSUER` y `OIDC_INTERNAL_URL`)?**  
-Ver `README.md → "Por qué dos URLs para Dex"` y `dex/README.md → "Notas sobre issuer y red Docker"`.
+**¿Cuál es la diferencia entre super-admin y admin promovido?**  
+Super-admin: email en `ADMIN_EMAILS` (env var del gateway). Su rol se fuerza a `admin` en cada login. No desmotable via panel. Admin promovido: rol seteado en MongoDB por otro admin. Se resetea a `student` si es degradado.
+
+**¿Por qué hay dos URLs para Dex?**  
+Ver `README.md → "Por qué dos URLs para Dex"`.
+
+**¿Cómo sé qué port usa cada servicio?**  
+Ver `docker-compose.yml` → `ports` de cada servicio.
 
 **¿Puedo correr el frontend sin Docker?**  
-Sí. `cd frontend && npm run dev`. Requiere que el gateway corra en `:3001` (puede ser el container `parcial-gateway` con el puerto expuesto).
+Sí. `cd frontend && npm run dev`. Requiere gateway en `:3001` y progress service en `:3002`.
 
 **¿Cómo agrego un punto 11 al parcial?**  
-Agregar una entrada al array `examSections` en `frontend/src/data/questions.ts`. El `App.tsx` y `SectionCard` lo renderizan automáticamente sin cambios adicionales.
+Agregar entrada al array `examSections` en `questions.ts`. El router y los componentes lo renderizan automáticamente.
 
-**¿Por qué `sessionStorage` y no una cookie?**  
-Ver `README.md → "Decisiones de diseño"`.
-eño"`.
-�o"`.
+**¿Los cambios del panel admin se pierden al reiniciar?**  
+No. Se persisten en el volumen `mongo-data` de Docker. Solo se pierden con `docker compose down -v`.

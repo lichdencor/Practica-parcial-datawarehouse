@@ -20,13 +20,14 @@ services:
     environment:
       PORT: "3001"
       SESSION_SECRET: "parcial-dbs2-secret-2024"
-      OIDC_ISSUER: "http://localhost:5556/dex"
+      OIDC_ISSUER: "${OIDC_ISSUER:-http://localhost:5556/dex}"
       OIDC_INTERNAL_URL: "http://dex:5556/dex"
       OIDC_CLIENT_ID: "gateway-client"
       OIDC_CLIENT_SECRET: "gateway-secret"
-      OIDC_CALLBACK_URL: "http://localhost:3001/callback"
-      FRONTEND_URL: "http://localhost:5173"
+      OIDC_CALLBACK_URL: "${OIDC_CALLBACK_URL:-http://localhost:3001/callback}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:5173}"
       PROGRESS_SERVICE_URL: "http://progress:3002"
+      ADMIN_EMAILS: "${ADMIN_EMAILS:-lucas.chavez@comunidad.ub.edu.ar}"
     depends_on:
       - dex
       - progress
@@ -37,7 +38,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_GATEWAY_URL: "http://localhost:3001"
+        VITE_GATEWAY_URL: "${FRONTEND_URL:-http://localhost:5173}"
     container_name: parcial-frontend
     ports:
       - "5173:80"

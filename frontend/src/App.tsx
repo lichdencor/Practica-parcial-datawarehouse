@@ -1,19 +1,38 @@
 import { useState, useEffect, createContext, useContext } from 'react'
+import { BrowserRouter as Router } from 'react-router-dom'
 import Login from './components/Login'
 import Header from './components/Header'
-import MultipleChoiceSection from './components/MultipleChoiceSection'
-import DwhDiagram from './components/DwhDiagram'
-import SqlShell from './components/SqlShell'
+import Navbar from './components/Navbar'
+import AppRouter from './AppRouter'
 import { examSections } from './data/questions'
+import { theoryConcepts } from './data/theory'
+import { quickPracticeData } from './data/practice_quick'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
 const TOKEN_KEY = 'parcial_dbs2_token'
 
-interface User {
+export interface User {
   name: string
   email: string
   sub: string
+  role: 'student' | 'admin'
 }
+
+// --- User Context ---
+
+interface UserContextType {
+  user: User
+  isAdmin: boolean
+  logout: () => void
+}
+
+export const UserContext = createContext<UserContextType>({
+  user: { name: '', email: '', sub: '', role: 'student' },
+  isAdmin: false,
+  logout: () => {},
+})
+
+// --- Progress Context ---
 
 interface ProgressContextType {
   progress: Record<string, any>
@@ -27,13 +46,34 @@ export const ProgressContext = createContext<ProgressContextType>({
   loading: false
 })
 
+// --- Content Context ---
+
+type ExamSections = typeof examSections
+type TheoryConcepts = typeof theoryConcepts
+type QuickPracticeData = typeof quickPracticeData
+
+interface ContentContextType {
+  questions: ExamSections
+  theory: TheoryConcepts
+  quickPractice: QuickPracticeData
+  saveContent: (type: 'questions' | 'theory' | 'quickPractice', data: any) => Promise<void>
+}
+
+export const ContentContext = createContext<ContentContextType>({
+  questions: examSections,
+  theory: theoryConcepts,
+  quickPractice: quickPracticeData,
+  saveContent: async () => {},
+})
+
+// --- Auth Hook ---
+
 function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Handle OAuth callback token in URL
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
     const error = params.get('auth_error')
@@ -89,13 +129,13 @@ function useAuth() {
   return { user, loading, authError, logout }
 }
 
-function ProgressProvider({ children, user }: { children: React.ReactNode; user: User | null }) {
+// --- Progress Provider ---
+
+function ProgressProvider({ children, user }: { children: React.ReactNode; user: User }) {
   const [progress, setProgress] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!user) return
-
     const token = sessionStorage.getItem(TOKEN_KEY)
     setLoading(true)
     fetch(`${GATEWAY_URL}/api/progress`, {
@@ -131,99 +171,82 @@ function ProgressProvider({ children, user }: { children: React.ReactNode; user:
   )
 }
 
-function SectionCard({ section }: { section: (typeof examSections)[0] }) {
-  const [open, setOpen] = useState(true)
+// --- Content Provider ---
+
+function ContentProvider({ children }: { children: React.ReactNode }) {
+  const [questions, setQuestions] = useState<ExamSections>(examSections)
+  const [theory, setTheory] = useState<TheoryConcepts>(theoryConcepts)
+  const [quickPractice, setQuickPractice] = useState<QuickPracticeData>(quickPracticeData)
+
+  useEffect(() => {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    const headers = { Authorization: `Bearer ${token}` }
+
+    const fetchContent = async (type: string) => {
+      try {
+        const res = await fetch(`${GATEWAY_URL}/api/content/${type}`, { headers })
+        if (!res.ok) return null
+        const doc = await res.json()
+        return doc?.data ?? null
+      } catch {
+        return null
+      }
+    }
+
+    Promise.all([
+      fetchContent('questions'),
+      fetchContent('theory'),
+      fetchContent('quickPractice'),
+    ]).then(([q, t, p]) => {
+      if (q) setQuestions(q)
+      if (t) setTheory(t)
+      if (p) setQuickPractice(p)
+    })
+  }, [])
+
+  const saveContent = async (type: 'questions' | 'theory' | 'quickPractice', data: any) => {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    const res = await fetch(`${GATEWAY_URL}/api/admin/content/${type}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ data }),
+    })
+    if (!res.ok) throw new Error('Failed to save content')
+
+    if (type === 'questions') setQuestions(data)
+    if (type === 'theory') setTheory(data)
+    if (type === 'quickPractice') setQuickPractice(data)
+  }
 
   return (
-    <div className="mb-6" id={`section-${section.id}`}>
-      <button
-        className="w-full text-left bg-ub-dark text-white px-5 py-4 rounded-xl shadow-md flex items-center justify-between hover:bg-ub-mid transition-colors"
-        onClick={() => setOpen(o => !o)}
-      >
-        <div>
-          <span className="text-ub-pale text-sm font-medium">{section.title}</span>
-          <h2 className="text-base font-bold mt-0.5">{section.subtitle}</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-            section.type === 'multiple-choice' ? 'bg-blue-400 text-white' :
-            section.type === 'dwh-diagram' ? 'bg-purple-400 text-white' :
-            'bg-green-400 text-white'
-          }`}>
-            {section.type === 'multiple-choice' ? 'Opción múltiple' :
-             section.type === 'dwh-diagram' ? 'Diagrama DWH' : 'SQL Shell'}
-          </span>
-          <svg
-            className={`w-5 h-5 transition-transform ${open ? 'rotate-180' : ''}`}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </button>
-
-      {open && (
-        <div className="mt-3 px-1">
-          {section.type === 'multiple-choice' && (
-            <MultipleChoiceSection section={section} />
-          )}
-          {section.type === 'dwh-diagram' && section.diagram && (
-            <div>
-              {section.theory && (
-                <div className="bg-blue-50 border-l-4 border-ub-mid rounded-r-xl p-4 mb-4 text-sm text-gray-700">
-                  {section.theory}
-                </div>
-              )}
-              <DwhDiagram diagram={section.diagram} />
-            </div>
-          )}
-          {section.type === 'sql-shell' && section.sqlExercises && (
-            <SqlShell exercises={section.sqlExercises} theory={section.theory} />
-          )}
-        </div>
-      )}
-    </div>
+    <ContentContext.Provider value={{ questions, theory, quickPractice, saveContent }}>
+      {children}
+    </ContentContext.Provider>
   )
 }
 
-function ExamPage({ user, onLogout }: { user: User; onLogout: () => void }) {
+// --- Layout ---
+
+function Layout({ onLogout }: { onLogout: () => void }) {
+  const { user } = useContext(UserContext)
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header user={user} onLogout={onLogout} />
-
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        {/* Quick nav */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-8">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Navegación rápida</p>
-          <div className="flex flex-wrap gap-2">
-            {examSections.map(s => (
-              <a
-                key={s.id}
-                href={`#section-${s.id}`}
-                className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
-                  s.type === 'multiple-choice' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' :
-                  s.type === 'dwh-diagram' ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' :
-                  'bg-green-100 text-green-700 hover:bg-green-200'
-                }`}
-              >
-                {s.title}
-              </a>
-            ))}
-          </div>
-        </div>
-
-        {/* All sections in order */}
-        {examSections.map(section => (
-          <SectionCard key={section.id} section={section} />
-        ))}
+      <Navbar />
+      <main className="flex-1">
+        <AppRouter />
       </main>
-
-      <footer className="border-t border-gray-200 bg-white py-6 text-center text-xs text-gray-400 mt-8">
+      <footer className="border-t border-gray-200 bg-white py-6 text-center text-xs text-gray-400">
         DBS2 — Modelo Parcial 2022 · Universidad de Belgrano
       </footer>
     </div>
   )
 }
+
+// --- App Root ---
 
 export default function App() {
   const { user, loading, authError, logout } = useAuth()
@@ -243,9 +266,17 @@ export default function App() {
     return <Login error={authError} />
   }
 
+  const isAdmin = user.role === 'admin'
+
   return (
-    <ProgressProvider user={user}>
-      <ExamPage user={user} onLogout={logout} />
-    </ProgressProvider>
+    <Router>
+      <UserContext.Provider value={{ user, isAdmin, logout }}>
+        <ProgressProvider user={user}>
+          <ContentProvider>
+            <Layout onLogout={logout} />
+          </ContentProvider>
+        </ProgressProvider>
+      </UserContext.Provider>
+    </Router>
   )
 }
