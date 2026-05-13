@@ -25,6 +25,8 @@
 - [x] Rol incluido en JWT de sesión y en `/api/me`
 - [x] Panel admin (`/admin`) — gestión de usuarios y editor de contenido
 - [x] Editor dual (Visual / JSON) con validación estructural de esquemas
+- [x] Soporte visual para subgrupos teóricos y múltiples tipos de práctica
+- [x] Flashcards 3D con carrusel aleatorio y seguimiento de aprendizaje
 - [x] `ContentContext` — carga contenido de MongoDB con fallback estático
 - [x] Estructura jerárquica en `theory.ts` (`ConceptCategory[]` con subgrupos)
 

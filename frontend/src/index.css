@@ -2,12 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  .transform-style-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+  .rotate-y-180 {
+    transform: rotateY(180deg);
+  }
+}
+
 @layer base {
   body {
     font-family: 'Inter', system-ui, sans-serif;
     @apply bg-gray-50 text-gray-800;
   }
 }
+
+.ub-dark { color: #1a365d; }
+.bg-ub-dark { background-color: #1a365d; }
+.bg-ub-mid { background-color: #2b6cb0; }
+.border-ub-mid { border-color: #2b6cb0; }
+.text-ub-mid { color: #2b6cb0; }
+.text-ub-dark { color: #1a365d; }
+.bg-ub-pale { background-color: #ebf8ff; }
+.text-ub-pale { color: #ebf8ff; }
 
 @layer components {
   .sql-editor {

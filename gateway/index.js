@@ -250,11 +250,22 @@ app.put('/api/admin/users/:userId/role', verifyToken, requireAdmin, async (req, 
       role: req.body.role,
     });
     res.json(response.data);
-  } catch (err) {
+    } catch (err) {
     console.error('Error updating user role:', err.message);
-    res.status(err.response?.status || 500).json({ error: 'Failed to update role' });
-  }
-});
+    res.status(err.response?.status || 500).json({ error: 'Failed to update user role' });
+    }
+    });
+
+    app.delete('/api/admin/users/:userId/progress', verifyToken, requireAdmin, async (req, res) => {
+    try {
+    const { userId } = req.params;
+    const response = await axios.delete(`${PROGRESS_SERVICE_URL}/progress/${userId}`);
+    res.json(response.data);
+    } catch (err) {
+    console.error('Error resetting user progress:', err.message);
+    res.status(err.response?.status || 500).json({ error: 'Failed to reset progress' });
+    }
+    });
 
 app.listen(PORT, () => {
   console.log(`Gateway running on port ${PORT}`);

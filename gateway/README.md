@@ -32,6 +32,7 @@ Servidor Express minimal que actúa como intermediario entre el browser y el Ide
 | `PUT` | `/api/admin/content/:type` | Bearer + Admin | Sobrescribe contenido editable en MongoDB. |
 | `GET` | `/api/admin/users` | Bearer + Admin | Lista todos los usuarios registrados con sus roles. |
 | `PUT` | `/api/admin/users/:userId/role` | Bearer + Admin | Cambia el rol de un usuario (`student` \| `admin`). No puede demotar super-admins. |
+| `DELETE` | `/api/admin/users/:userId/progress` | Bearer + Admin | Resetea el progreso de un usuario (vacía su mapa de respuestas). |
 | `GET` | `/logout` | No | Limpia cookie y redirige a `FRONTEND_URL?logout=true`. |
 
 ### Respuestas de `/api/me`

@@ -23,6 +23,7 @@ Diseñado para ser consumido exclusivamente a través del Gateway. No está expu
 | `POST` | `/progress/:userId` | Crea o actualiza progreso, email, name y role. Upsert: role solo se setea en inserción si no se provee explícitamente. |
 | `GET` | `/users` | Lista todos los usuarios con `userId`, `email`, `name`, `role`, `lastUpdated`. |
 | `PUT` | `/users/:userId/role` | Actualiza el rol de un usuario. Acepta `{ role: "student" \| "admin" }`. |
+| `DELETE` | `/progress/:userId` | Resetea el progreso de un usuario (vacía el campo `progress`). |
 | `GET` | `/content/:type` | Devuelve el documento de contenido para el tipo dado. `null` si no existe (el cliente cae en datos estáticos). |
 | `PUT` | `/content/:type` | Crea o actualiza el contenido para el tipo dado. Acepta `{ data: any, updatedBy: string }`. |
 

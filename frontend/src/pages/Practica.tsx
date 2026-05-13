@@ -1,8 +1,96 @@
-import { useState, useContext } from 'react'
+import { useState, useContext, useMemo } from 'react'
 import { ProgressContext, ContentContext } from '../App'
 import type { QuickPractice } from '../data/practice_quick'
 
-function PracticeCard({ item }: { item: QuickPractice }) {
+// --- Flashcard Component ---
+
+function FlashcardCarousel({ items }: { items: QuickPractice[] }) {
+  const { progress, saveProgress } = useContext(ProgressContext)
+  const [index, setIndex] = useState(0)
+  const [flipped, setFlipped] = useState(false)
+
+  // Seleccionar 5 aleatorias (o todas si son menos de 5)
+  const flashcards = useMemo(() => {
+    return [...items].sort(() => 0.5 - Math.random()).slice(0, 5)
+  }, [items])
+
+  if (flashcards.length === 0) return null
+
+  const current = flashcards[index]
+  const isLearned = !!progress[current.id]
+
+  const next = () => {
+    setFlipped(false)
+    setIndex((index + 1) % flashcards.length)
+  }
+
+  const prev = () => {
+    setFlipped(false)
+    setIndex((index - 1 + flashcards.length) % flashcards.length)
+  }
+
+  const toggleLearned = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    saveProgress(current.id, !isLearned)
+  }
+
+  return (
+    <div className="mb-12">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-black text-ub-dark uppercase tracking-widest flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          Flashcards de Repaso
+        </h3>
+        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+          {index + 1} / {flashcards.length}
+        </span>
+      </div>
+
+      <div className="relative perspective-1000 h-64 w-full max-w-lg mx-auto">
+        <div 
+          onClick={() => setFlipped(!flipped)}
+          className={`relative w-full h-full transition-transform duration-500 transform-style-3d cursor-pointer ${flipped ? 'rotate-y-180' : ''}`}
+        >
+          {/* Front */}
+          <div className="absolute inset-0 backface-hidden bg-ub-dark text-white rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-xl border-4 border-ub-mid/20">
+            <span className="text-[10px] font-bold text-ub-pale/40 uppercase mb-4 tracking-tighter">¿Qué es...?</span>
+            <h4 className="text-2xl font-black">{current.front}</h4>
+            <p className="text-[10px] mt-8 text-ub-pale/50 animate-pulse italic">Click para ver respuesta</p>
+          </div>
+
+          {/* Back */}
+          <div className="absolute inset-0 backface-hidden bg-white text-ub-dark rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-xl border-4 border-ub-mid/20 rotate-y-180">
+            <h4 className="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest">{current.front}</h4>
+            <p className="text-lg font-medium leading-relaxed">{current.back}</p>
+            
+            <button
+              onClick={toggleLearned}
+              className={`mt-6 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                isLearned ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              {isLearned ? 'Ya lo sé' : 'Marcar como aprendido'}
+            </button>
+          </div>
+        </div>
+
+        <button onClick={prev} className="absolute -left-4 top-1/2 -translate-y-1/2 bg-white p-2 rounded-full shadow-lg border border-gray-100 text-ub-dark hover:scale-110 transition-transform">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        <button onClick={next} className="absolute -right-4 top-1/2 -translate-y-1/2 bg-white p-2 rounded-full shadow-lg border border-gray-100 text-ub-dark hover:scale-110 transition-transform">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// --- Fact/Dimension Card ---
+
+function FactDimensionCard({ item }: { item: QuickPractice }) {
   const { progress, saveProgress } = useContext(ProgressContext)
   const [selected, setSelected] = useState<'fact' | 'dimension' | null>(progress[item.id] || null)
   const [showFeedback, setShowExplanation] = useState(!!progress[item.id])
@@ -17,7 +105,7 @@ function PracticeCard({ item }: { item: QuickPractice }) {
   const isCorrect = selected === item.correctType
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
       <div className="flex justify-between items-start mb-6">
         <div>
           <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Identificar Tabla</span>
@@ -35,7 +123,7 @@ function PracticeCard({ item }: { item: QuickPractice }) {
       <div className="mb-8">
         <p className="text-xs font-bold text-gray-400 uppercase mb-3">Atributos / Columnas</p>
         <div className="flex flex-wrap gap-2">
-          {item.columns.map(col => (
+          {(item.columns || []).map(col => (
             <span key={col} className="bg-gray-100 text-gray-600 px-2 py-1 rounded font-mono text-[11px] border border-gray-200">
               {col}
             </span>
@@ -68,7 +156,6 @@ function PracticeCard({ item }: { item: QuickPractice }) {
 
       {showFeedback && (
         <div className={`mt-6 p-4 rounded-xl text-sm ${isCorrect ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-          <strong>{isCorrect ? '¡Bien hecho! ' : 'Ops... '}</strong>
           {item.explanation}
         </div>
       )}
@@ -76,20 +163,116 @@ function PracticeCard({ item }: { item: QuickPractice }) {
   )
 }
 
+// --- Multiple Choice Card ---
+
+function PracticeMCCard({ item }: { item: QuickPractice }) {
+  const { progress, saveProgress } = useContext(ProgressContext)
+  const [selected, setSelected] = useState<string | null>(progress[item.id] || null)
+  const [showFeedback, setShowFeedback] = useState(!!progress[item.id])
+
+  const handleSelect = (choiceId: string) => {
+    if (selected) return
+    setSelected(choiceId)
+    setShowFeedback(true)
+    saveProgress(item.id, choiceId)
+  }
+
+  const correctChoice = item.choices?.find(c => c.correct)
+  const isCorrect = selected === correctChoice?.id
+
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-full flex flex-col">
+      <div className="mb-4">
+        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pregunta de Práctica</span>
+        <h3 className="text-lg font-bold text-ub-dark mt-1 leading-tight">{item.question}</h3>
+      </div>
+
+      <div className="space-y-3 mb-6 flex-1">
+        {item.choices?.map(choice => (
+          <button
+            key={choice.id}
+            onClick={() => handleSelect(choice.id)}
+            disabled={!!selected}
+            className={`w-full text-left p-4 rounded-xl text-sm border-2 transition-all font-medium ${
+              selected === choice.id
+                ? (choice.correct ? 'bg-green-500 border-green-600 text-white' : 'bg-red-500 border-red-600 text-white')
+                : (selected && choice.correct ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-gray-100 hover:border-ub-mid')
+            }`}
+          >
+            {choice.text}
+          </button>
+        ))}
+      </div>
+
+      {showFeedback && (
+        <div className={`p-4 rounded-xl text-xs ${isCorrect ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+          {item.explanation}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Theory/Question Card ---
+
+function PracticeTheoryCard({ item }: { item: QuickPractice }) {
+  const [revealed, setRevealed] = useState(false)
+
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-full flex flex-col">
+      <div className="mb-6">
+        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pregunta Teórica</span>
+        <h3 className="text-lg font-bold text-ub-dark mt-1 leading-tight">{item.question}</h3>
+      </div>
+
+      {!revealed ? (
+        <button 
+          onClick={() => setRevealed(true)}
+          className="w-full py-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-gray-400 text-xs font-bold hover:bg-gray-100 transition-all flex flex-col items-center gap-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+          Revelar Respuesta
+        </button>
+      ) : (
+        <div className="flex-1">
+          <div className="p-4 bg-amber-50 rounded-xl text-sm text-amber-900 border border-amber-100 leading-relaxed italic mb-4">
+            {item.explanation}
+          </div>
+          <button 
+            onClick={() => setRevealed(false)}
+            className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-ub-dark transition-colors"
+          >
+            Ocultar
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Main Page ---
+
 export default function Practica() {
   const { quickPractice } = useContext(ContentContext)
+
+  const flashcards = quickPractice.filter(i => i.type === 'flashcard')
+  const others = quickPractice.filter(i => i.type !== 'flashcard')
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="mb-10 text-center">
-        <h2 className="text-3xl font-black text-ub-dark">Práctica Rápida</h2>
-        <p className="text-gray-500 mt-2">Pon a prueba tu instinto analítico. ¿Sabes diferenciar un hecho de una dimensión?</p>
+        <h2 className="text-3xl font-black text-ub-dark">Entrenamiento DWH</h2>
+        <p className="text-gray-500 mt-2">Pon a prueba tu instinto analítico con diversos modos de práctica.</p>
       </div>
 
+      {flashcards.length > 0 && <FlashcardCarousel items={flashcards} />}
+
       <div className="grid md:grid-cols-2 gap-8">
-        {quickPractice.map(item => (
-          <PracticeCard key={item.id} item={item} />
-        ))}
+        {others.map(item => {
+          if (item.type === 'multiple-choice') return <PracticeMCCard key={item.id} item={item} />
+          if (item.type === 'theory') return <PracticeTheoryCard key={item.id} item={item} />
+          return <FactDimensionCard key={item.id} item={item} />
+        })}
       </div>
     </div>
   )

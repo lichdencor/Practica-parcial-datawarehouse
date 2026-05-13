@@ -61,6 +61,28 @@ function UsersSection() {
     }
   }
 
+  const resetProgress = async (userId: string) => {
+    if (!confirm('¿Estás seguro de que querés resetear el progreso de este usuario? Esta acción no se puede deshacer.')) return
+    setSaving(userId)
+    setError(null)
+    try {
+      const token = sessionStorage.getItem(TOKEN_KEY)
+      const res = await fetch(`${GATEWAY_URL}/api/admin/users/${userId}/progress`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Error al resetear el progreso')
+      }
+      alert('Progreso reseteado correctamente')
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSaving(null)
+    }
+  }
+
   if (loading) return <p className="text-gray-400 text-sm">Cargando usuarios…</p>
 
   return (
@@ -93,19 +115,29 @@ function UsersSection() {
                   </span>
                 </td>
                 <td className="py-3 px-3 text-right">
-                  {u.userId !== currentUser.sub && (
+                  <div className="flex justify-end gap-2">
                     <button
-                      onClick={() => toggleRole(u.userId, u.role)}
+                      onClick={() => resetProgress(u.userId)}
                       disabled={saving === u.userId}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                        u.role === 'admin'
-                          ? 'border-gray-200 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200'
-                          : 'border-amber-200 text-amber-600 hover:bg-amber-50'
-                      } disabled:opacity-40`}
+                      className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-red-100 text-red-500 hover:bg-red-50 disabled:opacity-40 transition-all"
+                      title="Resetear Progreso"
                     >
-                      {saving === u.userId ? '…' : u.role === 'admin' ? 'Quitar admin' : 'Hacer admin'}
+                      Reset Progreso
                     </button>
-                  )}
+                    {u.userId !== currentUser.sub && (
+                      <button
+                        onClick={() => toggleRole(u.userId, u.role)}
+                        disabled={saving === u.userId}
+                        className={`text-[10px] font-bold px-2 py-1.5 rounded-lg border transition-all ${
+                          u.role === 'admin'
+                            ? 'border-gray-200 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200'
+                            : 'border-amber-200 text-amber-600 hover:bg-amber-50'
+                        } disabled:opacity-40`}
+                      >
+                        {saving === u.userId ? '…' : u.role === 'admin' ? 'Quitar admin' : 'Hacer admin'}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -144,11 +176,15 @@ function validateContent(type: string, data: any): string | null {
 
   if (type === 'quickPractice') {
     for (const item of data) {
-      if (!item.id || !item.tableName || !Array.isArray(item.columns) || !item.correctType || !item.explanation) {
-        return 'Estructura de Práctica Rápida inválida. Falta algún campo obligatorio.'
+      if (!item.id || !item.type) return 'Estructura de Práctica inválida. id y type son obligatorios.'
+      if (item.type === 'fact-dimension') {
+        if (!item.tableName || !Array.isArray(item.columns) || !item.correctType) return 'Faltan campos para FACT vs Dimension'
       }
-      if (!['fact', 'dimension'].includes(item.correctType)) {
-        return 'correctType debe ser "fact" o "dimension".'
+      if (item.type === 'flashcard') {
+        if (!item.front || !item.back) return 'Faltan campos para Flashcard'
+      }
+      if (item.type === 'multiple-choice') {
+        if (!item.question || !Array.isArray(item.choices)) return 'Faltan campos para Múltiple Choice en Práctica'
       }
     }
   }
@@ -352,43 +388,138 @@ function ContentEditor({ contentKey, label, description, currentData }: {
                     <div className="grid gap-3">
                       <div className="flex gap-4">
                         <div className="flex-1">
-                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tabla</label>
-                          <input
-                            type="text"
-                            value={item.tableName}
-                            onChange={e => updateItem(idx, { ...item, tableName: e.target.value })}
-                            className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo de Ejercicio</label>
                           <select
-                            value={item.correctType}
-                            onChange={e => updateItem(idx, { ...item, correctType: e.target.value })}
-                            className="text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                            value={item.type || 'fact-dimension'}
+                            onChange={e => updateItem(idx, { ...item, type: e.target.value })}
+                            className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
                           >
-                            <option value="fact">FACT</option>
-                            <option value="dimension">Dimension</option>
+                            <option value="fact-dimension">FACT vs Dimension</option>
+                            <option value="multiple-choice">Múltiple Choice</option>
+                            <option value="theory">Pregunta Teórica</option>
+                            <option value="flashcard">Flashcard (Carrusel)</option>
                           </select>
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Columnas (coma p/ separar)</label>
-                        <input
-                          type="text"
-                          value={item.columns.join(', ')}
-                          onChange={e => updateItem(idx, { ...item, columns: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })}
-                          className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Explicación</label>
-                        <textarea
-                          value={item.explanation}
-                          onChange={e => updateItem(idx, { ...item, explanation: e.target.value })}
-                          className="w-full text-xs p-2 rounded border border-gray-200 h-20 resize-none focus:outline-none focus:border-ub-mid"
-                        />
-                      </div>
+
+                      {item.type === 'fact-dimension' && (
+                        <>
+                          <div className="flex gap-4">
+                            <div className="flex-1">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tabla</label>
+                              <input
+                                type="text"
+                                value={item.tableName}
+                                onChange={e => updateItem(idx, { ...item, tableName: e.target.value })}
+                                className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Correcta</label>
+                              <select
+                                value={item.correctType}
+                                onChange={e => updateItem(idx, { ...item, correctType: e.target.value })}
+                                className="text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                              >
+                                <option value="fact">FACT</option>
+                                <option value="dimension">Dimension</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Columnas</label>
+                            <input
+                              type="text"
+                              value={(item.columns || []).join(', ')}
+                              onChange={e => updateItem(idx, { ...item, columns: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })}
+                              className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {(item.type === 'multiple-choice' || item.type === 'theory') && (
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Pregunta</label>
+                          <input
+                            type="text"
+                            value={item.question}
+                            onChange={e => updateItem(idx, { ...item, question: e.target.value })}
+                            className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                          />
+                        </div>
+                      )}
+
+                      {item.type === 'multiple-choice' && (
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase">Opciones</label>
+                          {(item.choices || []).map((c: any, cIdx: number) => (
+                            <div key={cIdx} className="flex gap-2 items-center">
+                              <input
+                                type="checkbox"
+                                checked={c.correct}
+                                onChange={e => {
+                                  const newChoices = [...item.choices]
+                                  newChoices[cIdx] = { ...c, correct: e.target.checked }
+                                  updateItem(idx, { ...item, choices: newChoices })
+                                }}
+                              />
+                              <input
+                                type="text"
+                                value={c.text}
+                                onChange={e => {
+                                  const newChoices = [...item.choices]
+                                  newChoices[cIdx] = { ...c, text: e.target.value }
+                                  updateItem(idx, { ...item, choices: newChoices })
+                                }}
+                                className="flex-1 text-[11px] p-1 border-b border-gray-100 focus:outline-none"
+                              />
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => {
+                              const newChoices = [...(item.choices || []), { id: `c${Date.now()}`, text: 'Nueva Opción', correct: false }]
+                              updateItem(idx, { ...item, choices: newChoices })
+                            }}
+                            className="text-[10px] font-bold text-ub-mid hover:underline"
+                          >
+                            + Agregar Opción
+                          </button>
+                        </div>
+                      )}
+
+                      {item.type === 'flashcard' && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Lado A (Nombre)</label>
+                            <input
+                              type="text"
+                              value={item.front}
+                              onChange={e => updateItem(idx, { ...item, front: e.target.value })}
+                              className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Lado B (Explicación)</label>
+                            <textarea
+                              value={item.back}
+                              onChange={e => updateItem(idx, { ...item, back: e.target.value })}
+                              className="w-full text-xs p-2 rounded border border-gray-200 h-10 resize-none focus:outline-none focus:border-ub-mid"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {item.type !== 'flashcard' && (
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Explicación / Feedback</label>
+                          <textarea
+                            value={item.explanation}
+                            onChange={e => updateItem(idx, { ...item, explanation: e.target.value })}
+                            className="w-full text-xs p-2 rounded border border-gray-200 h-16 resize-none focus:outline-none focus:border-ub-mid"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                   {contentKey === 'theory' && (
@@ -403,7 +534,7 @@ function ContentEditor({ contentKey, label, description, currentData }: {
                         />
                       </div>
                       <div className="pl-4 border-l-2 border-gray-100 space-y-3">
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Conceptos</label>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Conceptos Directos</label>
                         {(item.concepts || []).map((c: any, cIdx: number) => (
                           <div key={cIdx} className="bg-white p-3 rounded-lg border border-gray-200 relative">
                             <button
@@ -459,34 +590,95 @@ function ContentEditor({ contentKey, label, description, currentData }: {
                           + Agregar Concepto
                         </button>
 
-                        {item.subgroups && item.subgroups.length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-gray-100">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Subgrupos</label>
-                            {item.subgroups.map((s: any, sIdx: number) => (
-                              <div key={sIdx} className="mb-4 bg-gray-100/50 p-3 rounded-lg">
-                                <input
-                                  type="text"
-                                  value={s.name}
-                                  onChange={e => {
+                        <div className="mt-4 pt-4 border-t border-gray-100">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Subgrupos</label>
+                          {(item.subgroups || []).map((s: any, sIdx: number) => (
+                            <div key={sIdx} className="mb-4 bg-gray-100/50 p-3 rounded-xl border border-gray-200 relative">
+                              <button
+                                onClick={() => {
+                                  const newSubgroups = item.subgroups.filter((_: any, i: number) => i !== sIdx)
+                                  updateItem(idx, { ...item, subgroups: newSubgroups })
+                                }}
+                                className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                              <input
+                                type="text"
+                                placeholder="Nombre del Subgrupo"
+                                value={s.name}
+                                onChange={e => {
+                                  const newSubgroups = [...item.subgroups]
+                                  newSubgroups[sIdx] = { ...s, name: e.target.value }
+                                  updateItem(idx, { ...item, subgroups: newSubgroups })
+                                }}
+                                className="w-full text-xs font-black bg-transparent border-b border-gray-200 mb-3 focus:outline-none"
+                              />
+                              <div className="space-y-2">
+                                {(s.concepts || []).map((sc: any, scIdx: number) => (
+                                  <div key={scIdx} className="bg-white p-2 rounded border border-gray-200 relative">
+                                    <button
+                                      onClick={() => {
+                                        const newSc = s.concepts.filter((_: any, i: number) => i !== scIdx)
+                                        const newSubgroups = [...item.subgroups]
+                                        newSubgroups[sIdx] = { ...s, concepts: newSc }
+                                        updateItem(idx, { ...item, subgroups: newSubgroups })
+                                      }}
+                                      className="absolute top-1 right-1 text-gray-300 hover:text-red-500"
+                                    >
+                                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                    <input
+                                      type="text"
+                                      placeholder="Título"
+                                      value={sc.title}
+                                      onChange={e => {
+                                        const newSc = [...s.concepts]
+                                        newSc[scIdx] = { ...sc, title: e.target.value }
+                                        const newSubgroups = [...item.subgroups]
+                                        newSubgroups[sIdx] = { ...s, concepts: newSc }
+                                        updateItem(idx, { ...item, subgroups: newSubgroups })
+                                      }}
+                                      className="w-full text-[10px] font-bold mb-1 focus:outline-none"
+                                    />
+                                    <textarea
+                                      placeholder="Contenido"
+                                      value={sc.content}
+                                      onChange={e => {
+                                        const newSc = [...s.concepts]
+                                        newSc[scIdx] = { ...sc, content: e.target.value }
+                                        const newSubgroups = [...item.subgroups]
+                                        newSubgroups[sIdx] = { ...s, concepts: newSc }
+                                        updateItem(idx, { ...item, subgroups: newSubgroups })
+                                      }}
+                                      className="w-full text-[10px] h-12 resize-none focus:outline-none"
+                                    />
+                                  </div>
+                                ))}
+                                <button
+                                  onClick={() => {
+                                    const newSc = [...(s.concepts || []), { id: `sc${Date.now()}`, title: 'Nuevo Concepto', content: '' }]
                                     const newSubgroups = [...item.subgroups]
-                                    newSubgroups[sIdx] = { ...s, name: e.target.value }
+                                    newSubgroups[sIdx] = { ...s, concepts: newSc }
                                     updateItem(idx, { ...item, subgroups: newSubgroups })
                                   }}
-                                  className="w-full text-xs font-black bg-transparent border-b border-gray-200 mb-2 focus:outline-none"
-                                />
-                                <div className="space-y-2">
-                                  {(s.concepts || []).map((sc: any, scIdx: number) => (
-                                    <div key={scIdx} className="bg-white p-2 rounded border border-gray-200 text-[10px]">
-                                      <div className="font-bold">{sc.title}</div>
-                                      <div className="text-gray-400 truncate">{sc.content}</div>
-                                    </div>
-                                  ))}
-                                  <p className="text-[9px] text-gray-400 italic">Los conceptos de subgrupos solo se editan en JSON.</p>
-                                </div>
+                                  className="text-[9px] font-bold text-ub-mid hover:underline"
+                                >
+                                  + Agregar Concepto al Subgrupo
+                                </button>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => {
+                              const newSubgroups = [...(item.subgroups || []), { name: 'Nuevo Subgrupo', concepts: [] }]
+                              updateItem(idx, { ...item, subgroups: newSubgroups })
+                            }}
+                            className="text-[10px] font-bold text-gray-500 hover:text-ub-dark"
+                          >
+                            + Crear Nuevo Subgrupo
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}

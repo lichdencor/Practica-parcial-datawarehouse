@@ -178,28 +178,25 @@ Array `examSections: ExamSection[]`. Cada sección tiene un `type` que determina
 
 ### `src/data/theory.ts` — Conceptos teóricos
 
-Estructura jerárquica `ConceptCategory[]`. Cada categoría puede tener conceptos planos o subgrupos:
+Estructura jerárquica `ConceptCategory[]`. Soporta conceptos directos y subgrupos con sus propios conceptos:
 
 ```typescript
-// Categoría sin subgrupos (lista plana)
-{ category: 'Fundamental', concepts: [{ id, title, content }] }
-
-// Categoría con subgrupos
 {
   category: 'Modeling',
+  concepts: [{ id, title, content }], // Conceptos directos
   subgroups: [
     { name: 'Hechos y Dimensiones', concepts: [...] },
-    { name: 'Dimensiones',          concepts: [...] },
-    { name: 'Esquemas',             concepts: [...] },
   ]
 }
 ```
 
-El componente `Conceptos.tsx` renderiza la jerarquía tal como está definida en el JSON — para reorganizar, se mueven bloques, no se cambian tags en items individuales.
-
 ### `src/data/practice_quick.ts` — Práctica rápida
 
-Array `QuickPractice[]`: cada item tiene `tableName`, `columns`, `correctType` ('fact' | 'dimension') y `explanation`.
+Estructura polimórfica `QuickPractice[]` que soporta 4 tipos de entrenamiento:
+- **`fact-dimension`**: Identificación de tablas FACT vs Dimension.
+- **`multiple-choice`**: Preguntas de opción múltiple aplicadas.
+- **`theory`**: Preguntas conceptuales con respuesta revelable.
+- **`flashcard`**: Fichas de repaso con Nombre (frente) y Explicación (dorso).
 
 ---
 
@@ -209,16 +206,19 @@ Solo accesible para usuarios con `role === 'admin'`. `AppRouter` redirige a `/in
 
 ### Tab Usuarios
 - Lista todos los usuarios registrados en MongoDB con su rol actual.
-- Botón para promover/demotar entre `student` y `admin`.
+- **Resetear Progreso:** Botón para limpiar el mapa de respuestas de cualquier usuario (útil para permitir re-intentos de exámenes).
+- **Gestión de Roles:** Botón para promover/demotar entre `student` y `admin`.
 - No puede demotar super-admins (definidos en `ADMIN_EMAILS` en el gateway).
 
 ### Tab Contenido
-- **Editor Dual:** Permite editar cada tipo de contenido (`questions`, `theory`, `quickPractice`) usando una interfaz **Visual** (formularios interactivos) o **JSON Raw**.
-- **Validación Estructural:** Al intentar guardar, el sistema valida que el contenido (tanto en modo visual como JSON) siga la estructura de datos requerida por la aplicación. Si el esquema es incorrecto, no se permite el guardado.
-- **Agregar Contenido:** Botón interactivo para agregar nuevos registros con valores predeterminados.
+- **Editor Visual Avanzado:** 
+    - **Teoría:** Edición de categorías, conceptos directos y subgrupos completos (incluyendo sus conceptos internos).
+    - **Práctica:** Formularios dinámicos según el tipo de ejercicio (Flashcards, MC, etc.).
+- **Flashcards 3D:** Los alumnos ven un carrusel aleatorio de 5 fichas con efecto de giro y pueden marcar cuáles ya conocen (persiste en MongoDB).
+- **Validación Estructural:** Validación en tiempo real del esquema JSON para evitar errores en el frontend.
 - Al guardar, el contenido se persiste en MongoDB via `PUT /api/admin/content/:type`.
 - El cambio aplica para todos los usuarios en el próximo load de la página.
-- Para restaurar el contenido original, pegar el JSON del archivo `src/data/*.ts` correspondiente.
+- Para restaurar el contenido original, pegar el JSON del archivo `src/data/*.ts` correspondiente en la solapa JSON.
 
 ---
 
