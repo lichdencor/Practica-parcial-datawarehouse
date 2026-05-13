@@ -34,7 +34,8 @@ frontend/src/
 │   ├── questions.ts               ← Banco de preguntas del parcial (tipo ExamSection[])
 │   ├── theory.ts                  ← Conceptos teóricos (tipo ConceptCategory[])
 │   ├── practice_quick.ts          ← Ejercicios de práctica rápida (tipo QuickPractice[])
-│   └── sql_practice.ts            ← Módulo SQL Training (tipo SqlPractice[])
+│   ├── sql_practice.ts            ← Módulo SQL Training (tipo SqlPractice[])
+│   └── glossary.ts                ← Glosario de términos DWH (tipo GlossaryEntry[])
 │
 ├── components/
 │   ├── Header.tsx                 ← Barra superior: usuario, badge ADM, progreso, logout
@@ -42,14 +43,17 @@ frontend/src/
 │   ├── Login.tsx                  ← Pantalla de bienvenida / SSO
 │   ├── MultipleChoiceSection.tsx  ← Preguntas de opción múltiple (puntos 1–6)
 │   ├── DwhDiagram.tsx             ← Diagrama SVG de esquema DWH (puntos 7 y 9)
+│   ├── DwhDiagramBuilder.tsx      ← Constructor visual de diagramas para admins
 │   └── SqlShell.tsx               ← Editor SQL + validador de sintaxis (puntos 8 y 10)
 │
 └── pages/
     ├── Conceptos.tsx              ← /conceptos — cards de teoría por categoría y subgrupo
     ├── Practica.tsx               ← /practica  — identificación Fact vs Dimension
     ├── Ejercicios.tsx             ← /ejercicios — SQL Training Module (ruta de aprendizaje por niveles)
+    ├── Glosario.tsx               ← /glosario — Búsqueda y filtros de términos DWH
+    ├── Cronometrado.tsx           ← /cronometrado — Modo examen con timer configurable
     ├── Integrador.tsx             ← /integrador — simulacro completo del parcial
-    └── Admin.tsx                  ← /admin      — panel de roles y editor de contenido (solo admins)
+    └── Admin.tsx                  ← /admin      — panel de roles, editor y constructor de esquemas
 ```
 
 ---
@@ -90,13 +94,14 @@ export const ContentContext = createContext<{
   theory:        typeof theoryConcepts     // ConceptCategory[]
   quickPractice: typeof quickPracticeData  // QuickPractice[]
   sqlPractices:  typeof sqlPracticeData    // SqlPractice[]
+  glossary:      typeof glossaryData       // GlossaryEntry[]
   saveContent:   (type, data) => Promise<void>
 }>()
 ```
 
-Al montar, `ContentProvider` fetchea los cuatro tipos de contenido desde `GET /api/content/:type`. Si MongoDB tiene datos para un tipo (editados via panel admin), los usa; si no, usa los datos estáticos del bundle (fallback transparente).
+Al montar, `ContentProvider` fetchea los cinco tipos de contenido desde `GET /api/content/:type`. Si MongoDB tiene datos para un tipo (editados via panel admin), los usa; si no, usa los datos estáticos del bundle (fallback transparente).
 
-`saveContent` llama a `PUT /api/admin/content/:type` y actualiza el estado local inmediatamente.
+`saveContent` llama a `PUT /api/admin/content/:type` (tipos: `questions`, `theory`, `quickPractice`, `sqlPractices`, `glossary`) y actualiza el estado local inmediatamente.
 
 ---
 
@@ -219,6 +224,22 @@ Array `sqlPracticeData: SqlPractice[]`. Cada ejercicio tiene un nivel de dificul
 
 Mostrado en `/ejercicios` como ruta de aprendizaje progresiva con sidebar de navegación y estado de completitud. Usa `SqlShell` para la edición. Editable desde el panel admin (`sqlPractices`).
 
+### `src/data/glossary.ts` — Glosario DWH
+
+Array `glossaryData: GlossaryEntry[]`. Contiene términos clave y sus definiciones:
+
+```typescript
+{
+  id: 'g1',
+  term: 'SCD (Slowly Changing Dimensions)',
+  definition: 'Técnica para manejar cambios en los datos de las dimensiones a lo largo del tiempo...',
+  category: 'Modelado',
+  example: 'Cambio de domicilio de un cliente (Tipo 1, 2 o 3).',
+}
+```
+
+Mostrado en `/glosario` con herramientas de búsqueda y filtrado por categorías.
+
 ---
 
 ## Panel de administración (`/admin`)
@@ -233,17 +254,26 @@ Solo accesible para usuarios con `role === 'admin'`. `AppRouter` redirige a `/in
 
 ### Tab Contenido
 
-Cuatro secciones editables (`questions`, `theory`, `quickPractice`, `sqlPractices`):
+Cinco secciones editables (`questions`, `theory`, `quickPractice`, `sqlPractices`, `glossary`):
 
 - **Editor Visual Avanzado:** 
     - **Teoría:** Edición de categorías, conceptos directos y subgrupos completos (incluyendo sus conceptos internos).
     - **Práctica:** Formularios dinámicos según el tipo de ejercicio (Flashcards, MC, etc.).
     - **SQL Training:** Edición de ejercicios con campos id, difficulty, title, description, objective, hint, referenceQuery y schema opcional.
-- **Flashcards 3D:** Los alumnos ven un carrusel aleatorio de 5 fichas con efecto de giro y pueden marcar cuáles ya conocen (persiste en MongoDB).
+    - **Glosario:** Edición de términos, definiciones, categorías y ejemplos opcionales.
 - **Validación Estructural:** Validación en tiempo real del esquema JSON para evitar errores en el frontend.
 - Al guardar, el contenido se persiste en MongoDB via `PUT /api/admin/content/:type`.
-- El cambio aplica para todos los usuarios en el próximo load de la página.
 - Para restaurar el contenido original, pegar el JSON del archivo `src/data/*.ts` correspondiente en la solapa JSON.
+
+### Tab Esquemas DWH
+
+Un constructor visual de diagramas DWH (`DwhDiagramBuilder.tsx`) que permite:
+
+- **Auto-layout:** Botón para distribuir automáticamente las tablas (FACT en el centro, Dimensiones en círculo).
+- **Gestión de Tablas:** Crear tablas de tipo FACT o DIMENSION, definir sus columnas (PK, FK, Medida) y posicionarlas en el lienzo.
+- **Conexiones:** Trazar relaciones visuales entre tablas FACT y DIMENSION.
+- **Preview en tiempo real:** Ver cómo quedará el diagrama antes de guardar.
+- **Ejercicios de Esquema:** Crear nuevos puntos del parcial de tipo `schema-question` que vinculan un diagrama personalizado con preguntas de opción múltiple.
 
 ---
 

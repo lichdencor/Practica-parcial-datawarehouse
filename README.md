@@ -78,9 +78,12 @@ El rol queda grabado en el JWT al momento del login. Cambios de rol requieren re
 
 ## Contenido editable
 
-Los datos del parcial (preguntas, teoría, práctica y SQL training) están definidos en archivos TypeScript (`src/data/*.ts`) que sirven como **fallback estático**. Un admin puede editar el contenido desde el panel `/admin` → tab Contenido usando un **editor visual avanzado** (soporta múltiples modos de práctica, edición de subgrupos teóricos y ejercicios SQL por niveles), y los cambios se persisten en MongoDB con prioridad sobre los datos estáticos.
+Los datos del parcial (preguntas, teoría, práctica, SQL training y glosario) están definidos en archivos TypeScript (`src/data/*.ts`) que sirven como **fallback estático**. Un admin puede editar el contenido desde el panel `/admin` usando herramientas avanzadas:
 
-Para restaurar el contenido original de una sección, copiar el JSON del archivo TS correspondiente y pegarlo en la solapa JSON del editor del panel.
+1.  **Tab Contenido:** Editor visual/JSON para todas las secciones de datos (incluyendo el nuevo Glosario).
+2.  **Tab Esquemas DWH:** Un **Constructor de Esquemas DWH** visual que permite crear y modificar diagramas de tablas FACT/Dimension con auto-layout, y vincularlos a nuevos ejercicios de tipo "Esquema + Preguntas".
+
+Los cambios se persisten en MongoDB con prioridad sobre los datos estáticos.
 
 ---
 
@@ -188,20 +191,24 @@ modelo-parcial/
         │   ├── questions.ts     ← Preguntas del parcial (fallback estático)
         │   ├── theory.ts        ← Conceptos teóricos jerárquicos (fallback estático)
         │   ├── practice_quick.ts← Práctica rápida (fallback estático)
-        │   └── sql_practice.ts  ← Módulo SQL Training por niveles (fallback estático)
+        │   ├── sql_practice.ts  ← Módulo SQL Training por niveles (fallback estático)
+        │   └── glossary.ts      ← Términos y definiciones DWH (fallback estático)
         ├── components/
         │   ├── Header.tsx
         │   ├── Navbar.tsx
         │   ├── Login.tsx
         │   ├── MultipleChoiceSection.tsx
         │   ├── DwhDiagram.tsx
+        │   ├── DwhDiagramBuilder.tsx ← Constructor visual de esquemas para admins
         │   └── SqlShell.tsx
         └── pages/
             ├── Conceptos.tsx
             ├── Practica.tsx
             ├── Ejercicios.tsx   ← SQL Training Module (ruta progresiva por niveles)
+            ├── Glosario.tsx     ← /glosario — búsqueda y filtros de términos
+            ├── Cronometrado.tsx ← /cronometrado — Modo examen con timer
             ├── Integrador.tsx
-            └── Admin.tsx        ← Panel de roles y editor de contenido
+            └── Admin.tsx        ← Panel de roles, editor de contenido y constructor de esquemas
 ```
 
 ---

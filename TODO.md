@@ -38,6 +38,12 @@
 - [x] Editor visual de `sqlPractices` en panel admin (`/admin` → tab Contenido)
 - [x] Navbar: "Ejercicios" renombrado a "SQL Training"
 
-## Fase 6: Pendiente
-- [ ] **Modo Examen:** botón "Finalizar y Ver Resultados" en el Integrador en lugar de mostrar explicaciones de inmediato
+## Fase 6: Mejoras y Herramientas Avanzadas ✅
+- [x] **Modo Examen (Cronometrado):** sección `/cronometrado` con configuración de tiempo/preguntas, timer dinámico y resumen de resultados.
+- [x] **Glosario DWH:** sección `/glosario` con búsqueda y filtros por categorías base (Modelado, Tablas, Análisis).
+- [x] **DWH Schema Builder:** tab "Esquemas DWH" en el panel admin para construir diagramas visualmente con auto-layout y edición de tablas/conexiones.
+- [x] **Integración schema-question:** soporte para nuevos ejercicios de tipo "Esquema + Preguntas" que vinculan diagramas personalizados con preguntas MC.
+
+## Fase 7: Pendiente
 - [ ] **Actualizar `dex/README.md`:** agregar sección sobre roles y flujo de registro en MongoDB
+- [ ] **Exportación de Datos:** botón para exportar progreso o contenido editado a CSV/JSON desde el panel admin.

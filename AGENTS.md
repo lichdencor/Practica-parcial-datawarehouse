@@ -36,6 +36,8 @@ Si el README no menciona algo que estás a punto de cambiar, preguntá antes de 
 | Preguntas del Parcial | `frontend/src/data/questions.ts` |
 | Teoría y Conceptos | `frontend/src/data/theory.ts` |
 | Práctica Rápida | `frontend/src/data/practice_quick.ts` |
+| SQL Training | `frontend/src/data/sql_practice.ts` |
+| Glosario DWH | `frontend/src/data/glossary.ts` |
 | Configuración del IDP | `dex/config.yaml` |
 | Lógica del gateway | `gateway/index.js` |
 | Lógica del progress service | `progress-service/index.js` |
@@ -124,11 +126,11 @@ El `content` soporta `**negritas**` — el componente `ConceptCard` parsea `**te
 
 ### Modificar un diagrama DWH
 
-**Archivo:** `frontend/src/data/questions.ts` — sección con `type: 'dwh-diagram'`
+Hay dos formas:
+1. **Manual (fallback estático):** Editar `frontend/src/data/questions.ts` — sección con `type: 'dwh-diagram'`. Las coordenadas `x, y` son absolutas en píxeles SVG.
+2. **Visual (recomendado para admins):** Usar el panel `/admin` → tab **Esquemas DWH**. El `DwhDiagramBuilder.tsx` gestiona el auto-layout, tablas y conexiones visualmente.
 
-Las coordenadas `x, y` son absolutas en píxeles SVG. El componente calcula el `viewBox` automáticamente.
-
-Reglas de layout:
+Reglas de layout (si se hace manual):
 - Tabla FACT en el centro visual
 - Dimensiones de primer nivel a 180–250px del centro
 - Dimensiones de segundo nivel más alejadas, conectadas a la dimensión padre
@@ -166,9 +168,11 @@ Los super-admins no pueden ser degradados desde el panel.
 
 ### Editar contenido editable (via admin panel)
 
-Los datos en `src/data/*.ts` son el fallback estático. Los cambios hechos desde el panel `/admin` se persisten en MongoDB y tienen prioridad sobre los datos estáticos.
+Los datos en `src/data/*.ts` son el fallback estático. Un admin puede usar dos herramientas en el panel `/admin`:
+1. **Tab Contenido:** Editor para `questions`, `theory`, `quickPractice`, `sqlPractices` y `glossary`.
+2. **Tab Esquemas DWH:** Constructor visual de diagramas y ejercicios de tipo `schema-question`.
 
-Para restaurar el contenido original de un tipo, copiar el JSON del archivo TS correspondiente y pegarlo en el editor del panel admin.
+Los cambios se persisten en MongoDB y tienen prioridad sobre los datos estáticos. Para restaurar el contenido original, pegar el JSON del archivo TS correspondiente en el editor del panel admin.
 
 ### Cambios en el Dockerfile o docker-compose
 
