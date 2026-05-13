@@ -252,28 +252,99 @@ function PracticeTheoryCard({ item }: { item: QuickPractice }) {
 
 // --- Main Page ---
 
+const TYPE_CONFIG: Record<string, { title: string; subtitle: string; icon: React.ReactNode }> = {
+  'fact-dimension': {
+    title: 'Hechos vs Dimensiones',
+    subtitle: 'Identifica el tipo de tabla según sus atributos y propósito.',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    )
+  },
+  'multiple-choice': {
+    title: 'Selección Múltiple',
+    subtitle: 'Pon a prueba tus conocimientos con preguntas de opción múltiple.',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    )
+  },
+  'theory': {
+    title: 'Preguntas Teóricas',
+    subtitle: 'Explica conceptos fundamentales del Data Warehousing.',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    )
+  }
+}
+
 export default function Practica() {
   const { quickPractice } = useContext(ContentContext)
 
-  const flashcards = quickPractice.filter(i => i.type === 'flashcard')
-  const others = quickPractice.filter(i => i.type !== 'flashcard')
+  const groups = useMemo(() => {
+    return quickPractice.reduce((acc, item) => {
+      if (!acc[item.type]) acc[item.type] = []
+      acc[item.type].push(item)
+      return acc
+    }, {} as Record<string, QuickPractice[]>)
+  }, [quickPractice])
+
+  const flashcards = groups['flashcard'] || []
+  const typesOrdered = ['fact-dimension', 'multiple-choice', 'theory']
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="mb-10 text-center">
-        <h2 className="text-3xl font-black text-ub-dark">Entrenamiento DWH</h2>
-        <p className="text-gray-500 mt-2">Pon a prueba tu instinto analítico con diversos modos de práctica.</p>
+    <div className="max-w-5xl mx-auto px-4 py-12 space-y-20">
+      <div className="text-center max-w-2xl mx-auto">
+        <h2 className="text-4xl font-black text-ub-dark tracking-tight">Entrenamiento DWH</h2>
+        <p className="text-gray-500 mt-4 text-lg">
+          Un espacio interactivo para dominar los conceptos de Data Warehousing mediante la práctica activa.
+        </p>
       </div>
 
-      {flashcards.length > 0 && <FlashcardCarousel items={flashcards} />}
+      {flashcards.length > 0 && (
+        <section>
+          <FlashcardCarousel items={flashcards} />
+        </section>
+      )}
 
-      <div className="grid md:grid-cols-2 gap-8">
-        {others.map(item => {
-          if (item.type === 'multiple-choice') return <PracticeMCCard key={item.id} item={item} />
-          if (item.type === 'theory') return <PracticeTheoryCard key={item.id} item={item} />
-          return <FactDimensionCard key={item.id} item={item} />
-        })}
-      </div>
+      {typesOrdered.map(type => {
+        const items = groups[type]
+        if (!items || items.length === 0) return null
+        const config = TYPE_CONFIG[type]
+
+        return (
+          <section key={type} className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="flex items-center gap-4 mb-8 border-b border-gray-100 pb-6">
+              <div className="p-3 bg-ub-mid/10 text-ub-mid rounded-2xl">
+                {config.icon}
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-ub-dark tracking-tight">{config.title}</h3>
+                <p className="text-gray-500 text-sm font-medium">{config.subtitle}</p>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {items.map(item => {
+                if (item.type === 'multiple-choice') return <PracticeMCCard key={item.id} item={item} />
+                if (item.type === 'theory') return <PracticeTheoryCard key={item.id} item={item} />
+                if (item.type === 'fact-dimension') return <FactDimensionCard key={item.id} item={item} />
+                return null
+              })}
+            </div>
+          </section>
+        )
+      })}
+
+      {quickPractice.length === 0 && (
+        <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+          <p className="text-gray-400 font-medium">No hay ejercicios disponibles en este momento.</p>
+        </div>
+      )}
     </div>
   )
 }
