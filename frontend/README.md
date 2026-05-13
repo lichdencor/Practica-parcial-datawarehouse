@@ -33,7 +33,8 @@ frontend/src/
 ├── data/
 │   ├── questions.ts               ← Banco de preguntas del parcial (tipo ExamSection[])
 │   ├── theory.ts                  ← Conceptos teóricos (tipo ConceptCategory[])
-│   └── practice_quick.ts          ← Ejercicios de práctica rápida (tipo QuickPractice[])
+│   ├── practice_quick.ts          ← Ejercicios de práctica rápida (tipo QuickPractice[])
+│   └── sql_practice.ts            ← Módulo SQL Training (tipo SqlPractice[])
 │
 ├── components/
 │   ├── Header.tsx                 ← Barra superior: usuario, badge ADM, progreso, logout
@@ -46,7 +47,7 @@ frontend/src/
 └── pages/
     ├── Conceptos.tsx              ← /conceptos — cards de teoría por categoría y subgrupo
     ├── Practica.tsx               ← /practica  — identificación Fact vs Dimension
-    ├── Ejercicios.tsx             ← /ejercicios — grid de acceso directo a cada punto
+    ├── Ejercicios.tsx             ← /ejercicios — SQL Training Module (ruta de aprendizaje por niveles)
     ├── Integrador.tsx             ← /integrador — simulacro completo del parcial
     └── Admin.tsx                  ← /admin      — panel de roles y editor de contenido (solo admins)
 ```
@@ -88,11 +89,12 @@ export const ContentContext = createContext<{
   questions:     typeof examSections       // ExamSection[]
   theory:        typeof theoryConcepts     // ConceptCategory[]
   quickPractice: typeof quickPracticeData  // QuickPractice[]
+  sqlPractices:  typeof sqlPracticeData    // SqlPractice[]
   saveContent:   (type, data) => Promise<void>
 }>()
 ```
 
-Al montar, `ContentProvider` fetchea los tres tipos de contenido desde `GET /api/content/:type`. Si MongoDB tiene datos para un tipo (editados via panel admin), los usa; si no, usa los datos estáticos del bundle (fallback transparente).
+Al montar, `ContentProvider` fetchea los cuatro tipos de contenido desde `GET /api/content/:type`. Si MongoDB tiene datos para un tipo (editados via panel admin), los usa; si no, usa los datos estáticos del bundle (fallback transparente).
 
 `saveContent` llama a `PUT /api/admin/content/:type` y actualiza el estado local inmediatamente.
 
@@ -198,6 +200,25 @@ Estructura polimórfica `QuickPractice[]` que soporta 4 tipos de entrenamiento:
 - **`theory`**: Preguntas conceptuales con respuesta revelable.
 - **`flashcard`**: Fichas de repaso con Nombre (frente) y Explicación (dorso).
 
+### `src/data/sql_practice.ts` — Módulo SQL Training
+
+Array `sqlPracticeData: SqlPractice[]`. Cada ejercicio tiene un nivel de dificultad y un query de referencia:
+
+```typescript
+{
+  id: 'sql_join_1',
+  difficulty: 'intermedio',   // 'facil' | 'intermedio' | 'avanzado' | 'reto'
+  title: 'Dominando los JOINS: Hechos y Dimensiones',
+  description: '...',
+  objective: '...',           // Enunciado que ve el alumno
+  hint: '...',                // Pista desbloqueable
+  referenceQuery: 'SELECT ...', // Query de referencia para comparación
+  schema?: '...',             // Contexto de tablas (opcional)
+}
+```
+
+Mostrado en `/ejercicios` como ruta de aprendizaje progresiva con sidebar de navegación y estado de completitud. Usa `SqlShell` para la edición. Editable desde el panel admin (`sqlPractices`).
+
 ---
 
 ## Panel de administración (`/admin`)
@@ -211,9 +232,13 @@ Solo accesible para usuarios con `role === 'admin'`. `AppRouter` redirige a `/in
 - No puede demotar super-admins (definidos en `ADMIN_EMAILS` en el gateway).
 
 ### Tab Contenido
+
+Cuatro secciones editables (`questions`, `theory`, `quickPractice`, `sqlPractices`):
+
 - **Editor Visual Avanzado:** 
     - **Teoría:** Edición de categorías, conceptos directos y subgrupos completos (incluyendo sus conceptos internos).
     - **Práctica:** Formularios dinámicos según el tipo de ejercicio (Flashcards, MC, etc.).
+    - **SQL Training:** Edición de ejercicios con campos id, difficulty, title, description, objective, hint, referenceQuery y schema opcional.
 - **Flashcards 3D:** Los alumnos ven un carrusel aleatorio de 5 fichas con efecto de giro y pueden marcar cuáles ya conocen (persiste en MongoDB).
 - **Validación Estructural:** Validación en tiempo real del esquema JSON para evitar errores en el frontend.
 - Al guardar, el contenido se persiste en MongoDB via `PUT /api/admin/content/:type`.

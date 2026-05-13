@@ -3,6 +3,7 @@ import { ContentContext, UserContext } from '../App'
 import { examSections } from '../data/questions'
 import { theoryConcepts } from '../data/theory'
 import { quickPracticeData } from '../data/practice_quick'
+import { sqlPracticeData } from '../data/sql_practice'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
 const TOKEN_KEY = 'parcial_dbs2_token'

@@ -78,7 +78,7 @@ El rol queda grabado en el JWT al momento del login. Cambios de rol requieren re
 
 ## Contenido editable
 
-Los datos del parcial (preguntas, teoría, práctica) están definidos en archivos TypeScript (`src/data/*.ts`) que sirven como **fallback estático**. Un admin puede editar el contenido desde el panel `/admin` → tab Contenido usando un **editor visual avanzado** (soporta múltiples modos de práctica y edición de subgrupos teóricos), y los cambios se persisten en MongoDB con prioridad sobre los datos estáticos.
+Los datos del parcial (preguntas, teoría, práctica y SQL training) están definidos en archivos TypeScript (`src/data/*.ts`) que sirven como **fallback estático**. Un admin puede editar el contenido desde el panel `/admin` → tab Contenido usando un **editor visual avanzado** (soporta múltiples modos de práctica, edición de subgrupos teóricos y ejercicios SQL por niveles), y los cambios se persisten en MongoDB con prioridad sobre los datos estáticos.
 
 Para restaurar el contenido original de una sección, copiar el JSON del archivo TS correspondiente y pegarlo en la solapa JSON del editor del panel.
 
@@ -187,7 +187,8 @@ modelo-parcial/
         ├── data/
         │   ├── questions.ts     ← Preguntas del parcial (fallback estático)
         │   ├── theory.ts        ← Conceptos teóricos jerárquicos (fallback estático)
-        │   └── practice_quick.ts← Práctica rápida (fallback estático)
+        │   ├── practice_quick.ts← Práctica rápida (fallback estático)
+        │   └── sql_practice.ts  ← Módulo SQL Training por niveles (fallback estático)
         ├── components/
         │   ├── Header.tsx
         │   ├── Navbar.tsx
@@ -198,7 +199,7 @@ modelo-parcial/
         └── pages/
             ├── Conceptos.tsx
             ├── Practica.tsx
-            ├── Ejercicios.tsx
+            ├── Ejercicios.tsx   ← SQL Training Module (ruta progresiva por niveles)
             ├── Integrador.tsx
             └── Admin.tsx        ← Panel de roles y editor de contenido
 ```

@@ -30,6 +30,14 @@
 - [x] `ContentContext` — carga contenido de MongoDB con fallback estático
 - [x] Estructura jerárquica en `theory.ts` (`ConceptCategory[]` con subgrupos)
 
-## Fase 5: Pendiente
+## Fase 5: SQL Training Module ✅
+- [x] `data/sql_practice.ts` — ejercicios SQL por niveles (`facil` | `intermedio` | `avanzado` | `reto`)
+- [x] `/ejercicios` reconvertido en SQL Training Module con ruta de aprendizaje progresiva
+- [x] Sidebar con estado de completitud por ejercicio (persiste en `ProgressContext`)
+- [x] `sqlPractices` integrado en `ContentContext` con fetch/save desde MongoDB
+- [x] Editor visual de `sqlPractices` en panel admin (`/admin` → tab Contenido)
+- [x] Navbar: "Ejercicios" renombrado a "SQL Training"
+
+## Fase 6: Pendiente
 - [ ] **Modo Examen:** botón "Finalizar y Ver Resultados" en el Integrador en lugar de mostrar explicaciones de inmediato
 - [ ] **Actualizar `dex/README.md`:** agregar sección sobre roles y flujo de registro en MongoDB
