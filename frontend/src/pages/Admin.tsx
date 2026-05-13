@@ -6,6 +6,7 @@ import { quickPracticeData } from '../data/practice_quick'
 import { sqlPracticeData } from '../data/sql_practice'
 import { glossaryData } from '../data/glossary'
 import DwhDiagramBuilder from '../components/DwhDiagramBuilder'
+import Modal from '../components/Modal'
 import type { DwhDiagramConfig } from '../data/questions'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
@@ -999,8 +1000,8 @@ function EsquemasSection() {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState<DwhDiagramConfig>(EMPTY_DIAGRAM)
-  const [newTitle, setNewTitle] = useState('')
-  const [newSubtitle, setNewSubtitle] = useState('')
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftSubtitle, setDraftSubtitle] = useState('')
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
 
@@ -1011,27 +1012,35 @@ function EsquemasSection() {
   const startEdit = (globalIdx: number) => {
     const section = questions[globalIdx]
     setDraft(section.diagram ?? EMPTY_DIAGRAM)
+    setDraftTitle(section.title || '')
+    setDraftSubtitle(section.subtitle || '')
     setSelectedIdx(globalIdx)
     setCreating(false)
   }
 
   const startCreate = () => {
     setDraft(EMPTY_DIAGRAM)
-    setNewTitle(`Punto ${questions.length + 1}`)
-    setNewSubtitle('')
+    setDraftTitle(`Punto ${questions.length + 1}`)
+    setDraftSubtitle('')
     setCreating(true)
     setSelectedIdx(null)
+  }
+
+  const closeEditor = () => {
+    setSelectedIdx(null)
+    setCreating(false)
   }
 
   const saveEdit = async () => {
     if (selectedIdx === null) return
     setSaving(true)
     const updated = questions.map((s, i) =>
-      i === selectedIdx ? { ...s, diagram: draft } : s
+      i === selectedIdx ? { ...s, diagram: draft, title: draftTitle, subtitle: draftSubtitle } : s
     )
     try {
       await saveContent('questions', updated)
       setSuccess(true)
+      closeEditor()
       setTimeout(() => setSuccess(false), 3000)
     } finally {
       setSaving(false)
@@ -1039,12 +1048,12 @@ function EsquemasSection() {
   }
 
   const saveNew = async () => {
-    if (!newTitle.trim()) return
+    if (!draftTitle.trim()) return
     setSaving(true)
     const newSection = {
       id: Math.max(...questions.map(q => q.id), 0) + 1,
-      title: newTitle.trim(),
-      subtitle: newSubtitle.trim(),
+      title: draftTitle.trim(),
+      subtitle: draftSubtitle.trim(),
       type: 'schema-question' as const,
       diagram: draft,
       questions: [],
@@ -1084,11 +1093,10 @@ function EsquemasSection() {
         <div className="grid sm:grid-cols-2 gap-3">
           {diagramSections.map(section => {
             const globalIdx = questions.indexOf(section)
-            const isEditing = selectedIdx === globalIdx && !creating
             return (
               <div
                 key={section.id}
-                className={`bg-white rounded-xl border p-4 transition-all ${isEditing ? 'border-ub-mid ring-1 ring-ub-mid/30' : 'border-gray-200 hover:border-ub-mid/50'}`}
+                className="bg-white rounded-xl border border-gray-200 p-4 hover:border-ub-mid/50 transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -1099,33 +1107,12 @@ function EsquemasSection() {
                     <p className="text-xs text-gray-400">{section.subtitle}</p>
                   </div>
                   <button
-                    onClick={() => isEditing ? setSelectedIdx(null) : startEdit(globalIdx)}
+                    onClick={() => startEdit(globalIdx)}
                     className="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-ub-mid/30 text-ub-mid hover:bg-blue-50 flex-shrink-0"
                   >
-                    {isEditing ? 'Cerrar' : 'Editar'}
+                    Editar
                   </button>
                 </div>
-
-                {isEditing && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <DwhDiagramBuilder value={draft} onChange={setDraft} />
-                    <div className="flex gap-2 mt-4">
-                      <button
-                        onClick={saveEdit}
-                        disabled={saving}
-                        className="px-4 py-2 bg-ub-dark text-white text-xs font-bold rounded-lg hover:bg-ub-mid disabled:opacity-50"
-                      >
-                        {saving ? 'Guardando…' : 'Guardar Diagrama'}
-                      </button>
-                      <button
-                        onClick={() => setSelectedIdx(null)}
-                        className="px-4 py-2 text-gray-500 text-xs font-bold rounded-lg border border-gray-200 hover:bg-gray-50"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )
           })}
@@ -1138,55 +1125,57 @@ function EsquemasSection() {
         </div>
       )}
 
-      {/* New schema exercise form */}
-      {creating && (
-        <div className="bg-white rounded-2xl border border-ub-mid p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-gray-800">Nuevo Ejercicio de Esquema</h4>
-            <button onClick={() => setCreating(false)} className="text-gray-400 hover:text-gray-600">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+      {/* Editor Modal (Handles both New and Edit) */}
+      <Modal
+        isOpen={creating || selectedIdx !== null}
+        onClose={closeEditor}
+        title={creating ? 'Nuevo Ejercicio de Esquema' : 'Editar Esquema DWH'}
+      >
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Título</label>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Título del Punto</label>
               <input
                 type="text"
-                value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                className="w-full text-xs font-bold p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                value={draftTitle}
+                onChange={e => setDraftTitle(e.target.value)}
+                className="w-full text-xs font-bold p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-ub-mid"
+                placeholder="Ej: Punto 7"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Subtítulo / Descripción</label>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Subtítulo / Tema</label>
               <input
                 type="text"
-                value={newSubtitle}
-                onChange={e => setNewSubtitle(e.target.value)}
-                className="w-full text-xs p-2 rounded border border-gray-200 focus:outline-none focus:border-ub-mid"
+                value={draftSubtitle}
+                onChange={e => setDraftSubtitle(e.target.value)}
+                className="w-full text-xs p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-ub-mid"
+                placeholder="Ej: Star Schema - Ventas"
               />
             </div>
           </div>
-          <DwhDiagramBuilder value={draft} onChange={setDraft} />
-          <div className="flex gap-2">
+
+          <div className="p-1 bg-gray-50 rounded-2xl border border-gray-100">
+            <DwhDiagramBuilder value={draft} onChange={setDraft} />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <button
-              onClick={saveNew}
-              disabled={saving || !newTitle.trim()}
-              className="px-4 py-2 bg-ub-dark text-white text-xs font-bold rounded-lg hover:bg-ub-mid disabled:opacity-50"
-            >
-              {saving ? 'Guardando…' : 'Guardar Ejercicio'}
-            </button>
-            <button
-              onClick={() => setCreating(false)}
-              className="px-4 py-2 text-gray-500 text-xs font-bold rounded-lg border border-gray-200 hover:bg-gray-50"
+              onClick={closeEditor}
+              className="px-6 py-2.5 text-gray-500 text-sm font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
             >
               Cancelar
             </button>
+            <button
+              onClick={creating ? saveNew : saveEdit}
+              disabled={saving || !draftTitle.trim()}
+              className="px-8 py-2.5 bg-ub-dark text-white text-sm font-bold rounded-xl hover:bg-ub-mid shadow-lg shadow-ub-dark/20 disabled:opacity-50 transition-all"
+            >
+              {saving ? 'Guardando…' : (creating ? 'Crear Ejercicio' : 'Guardar Cambios')}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

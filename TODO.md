@@ -42,6 +42,7 @@
 - [x] **Modo Examen (Cronometrado):** sección `/cronometrado` con configuración de tiempo/preguntas, timer dinámico y resumen de resultados.
 - [x] **Glosario DWH:** sección `/glosario` con búsqueda y filtros por categorías base (Modelado, Tablas, Análisis).
 - [x] **DWH Schema Builder:** tab "Esquemas DWH" en el panel admin para construir diagramas visualmente con auto-layout y edición de tablas/conexiones.
+- [x] **Editor de Esquemas en Modal:** implementación de `Modal.tsx` para permitir la edición de diagramas DWH en pantalla completa, mejorando la comodidad del admin.
 - [x] **Integración schema-question:** soporte para nuevos ejercicios de tipo "Esquema + Preguntas" que vinculan diagramas personalizados con preguntas MC.
 
 ## Fase 7: Pendiente

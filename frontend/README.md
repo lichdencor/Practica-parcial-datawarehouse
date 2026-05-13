@@ -44,7 +44,8 @@ frontend/src/
 │   ├── MultipleChoiceSection.tsx  ← Preguntas de opción múltiple (puntos 1–6)
 │   ├── DwhDiagram.tsx             ← Diagrama SVG de esquema DWH (puntos 7 y 9)
 │   ├── DwhDiagramBuilder.tsx      ← Constructor visual de diagramas para admins
-│   └── SqlShell.tsx               ← Editor SQL + validador de sintaxis (puntos 8 y 10)
+│   ├── SqlShell.tsx               ← Editor SQL + validador de sintaxis (puntos 8 y 10)
+│   └── Modal.tsx                  ← Componente base para diálogos y editores expandidos
 │
 └── pages/
     ├── Conceptos.tsx              ← /conceptos — cards de teoría por categoría y subgrupo
@@ -267,13 +268,14 @@ Cinco secciones editables (`questions`, `theory`, `quickPractice`, `sqlPractices
 
 ### Tab Esquemas DWH
 
-Un constructor visual de diagramas DWH (`DwhDiagramBuilder.tsx`) que permite:
+Un constructor visual de diagramas DWH (`DwhDiagramBuilder.tsx`) que se despliega en un **modal de pantalla completa** para mayor comodidad. Permite:
 
 - **Auto-layout:** Botón para distribuir automáticamente las tablas (FACT en el centro, Dimensiones en círculo).
 - **Gestión de Tablas:** Crear tablas de tipo FACT o DIMENSION, definir sus columnas (PK, FK, Medida) y posicionarlas en el lienzo.
 - **Conexiones:** Trazar relaciones visuales entre tablas FACT y DIMENSION.
 - **Preview en tiempo real:** Ver cómo quedará el diagrama antes de guardar.
 - **Ejercicios de Esquema:** Crear nuevos puntos del parcial de tipo `schema-question` que vinculan un diagrama personalizado con preguntas de opción múltiple.
+- **Edición de Metadatos:** Modificación directa de títulos y subtítulos del ejercicio desde el modal.
 
 ---
 

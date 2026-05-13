@@ -81,7 +81,7 @@ El rol queda grabado en el JWT al momento del login. Cambios de rol requieren re
 Los datos del parcial (preguntas, teoría, práctica, SQL training y glosario) están definidos en archivos TypeScript (`src/data/*.ts`) que sirven como **fallback estático**. Un admin puede editar el contenido desde el panel `/admin` usando herramientas avanzadas:
 
 1.  **Tab Contenido:** Editor visual/JSON para todas las secciones de datos (incluyendo el nuevo Glosario).
-2.  **Tab Esquemas DWH:** Un **Constructor de Esquemas DWH** visual que permite crear y modificar diagramas de tablas FACT/Dimension con auto-layout, y vincularlos a nuevos ejercicios de tipo "Esquema + Preguntas".
+2.  **Tab Esquemas DWH:** Un **Constructor de Esquemas DWH** visual (ahora en un modal expandido para mayor comodidad) que permite crear y modificar diagramas de tablas FACT/Dimension con auto-layout, y vincularlos a nuevos ejercicios de tipo "Esquema + Preguntas".
 
 Los cambios se persisten en MongoDB con prioridad sobre los datos estáticos.
 

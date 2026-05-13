@@ -128,7 +128,7 @@ El `content` soporta `**negritas**` — el componente `ConceptCard` parsea `**te
 
 Hay dos formas:
 1. **Manual (fallback estático):** Editar `frontend/src/data/questions.ts` — sección con `type: 'dwh-diagram'`. Las coordenadas `x, y` son absolutas en píxeles SVG.
-2. **Visual (recomendado para admins):** Usar el panel `/admin` → tab **Esquemas DWH**. El `DwhDiagramBuilder.tsx` gestiona el auto-layout, tablas y conexiones visualmente.
+2. **Visual (recomendado para admins):** Usar el panel `/admin` → tab **Esquemas DWH**. Se despliega un editor en un modal de pantalla completa (`Modal.tsx` + `DwhDiagramBuilder.tsx`) que gestiona el auto-layout, tablas y conexiones visualmente.
 
 Reglas de layout (si se hace manual):
 - Tabla FACT en el centro visual
