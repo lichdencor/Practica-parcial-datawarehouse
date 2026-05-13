@@ -20,8 +20,8 @@ export default function AppRouter() {
       <Route path="/ejercicios" element={<Ejercicios />} />
       <Route path="/integrador" element={<Integrador />} />
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-      <Route path="/" element={<Navigate to="/integrador" replace />} />
-      <Route path="*" element={<Navigate to="/integrador" replace />} />
+      <Route path="/" element={<Navigate to="/conceptos" replace />} />
+      <Route path="*" element={<Navigate to="/conceptos" replace />} />
     </Routes>
   )
 }
