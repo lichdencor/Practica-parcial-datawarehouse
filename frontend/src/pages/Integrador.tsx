@@ -85,7 +85,9 @@ interface ResultsPanelProps {
 }
 
 function ResultsPanel({ questions, onClose }: ResultsPanelProps) {
-  const { progress } = useContext(ProgressContext)
+  const { progress, mastered } = useContext(ProgressContext)
+  const { quickPractice } = useContext(ContentContext)
+  const practiceIds = useMemo(() => new Set(quickPractice.map(item => item.id)), [quickPractice])
 
   let mcTotal = 0, mcCorrect = 0
   let sqlTotal = 0, sqlAttempted = 0
@@ -105,7 +107,7 @@ function ResultsPanel({ questions, onClose }: ResultsPanelProps) {
     }
   }
 
-  const xp = computeXP(progress)
+  const xp = computeXP(progress, mastered, practiceIds)
   const levelInfo = getLevelInfo(xp)
   const mcPct = mcTotal > 0 ? Math.round((mcCorrect / mcTotal) * 100) : 0
   const specialTitle = `x${questions.length} Data Engineer`

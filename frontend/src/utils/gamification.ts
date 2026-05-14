@@ -31,17 +31,35 @@ export const LEVELS = [
 // XP per action:
 // - flashcard learned (value === true): 5 XP
 // - sql_* key (SQL Training): 15 XP
-// - everything else (MC answer, fact/dim, integrador SQL): 10 XP
+// - everything else (MC answer, fact/dim): 10 XP
 // - keys starting with _ are internal flags, skipped
-export function computeXP(progress: Record<string, any>): number {
+// Practica items (practiceIds) are sourced from `mastered` only (correct answers).
+// Non-practica items are sourced from `progress`.
+export function computeXP(
+  progress: Record<string, any>,
+  mastered: Record<string, any>,
+  practiceIds: Set<string>
+): number {
   let xp = 0
+
+  // Non-practice items from progress (SQL, Integrador, etc.)
   for (const [key, value] of Object.entries(progress)) {
     if (key.startsWith('_')) continue
+    if (practiceIds.has(key)) continue
     if (value === false) continue
     if (value === true) { xp += 5; continue }
     if (key.startsWith('sql_')) { xp += 15; continue }
     xp += 10
   }
+
+  // Practice items: only correctly mastered ones count
+  for (const [key, value] of Object.entries(mastered)) {
+    if (key.startsWith('_')) continue
+    if (value === false) continue
+    if (value === true) { xp += 5; continue }
+    xp += 10
+  }
+
   return xp
 }
 
@@ -79,20 +97,28 @@ export function getIntegradorItems(questions: ExamSection[]): string[] {
 
 export function computeBadges(
   progress: Record<string, any>,
+  mastered: Record<string, any>,
   sqlPracticesCount: number,
 ): BadgeId[] {
   const earned: BadgeId[] = []
-  const keys = Object.keys(progress).filter(k => !k.startsWith('_'))
 
-  // MC answered: single-char choice id ('a', 'b', 'c', 'd')
-  const hasMC = keys.some(k => typeof progress[k] === 'string' && progress[k].length === 1)
+  // Merge: mastered wins for practice items; progress has SQL/Integrador
+  const combined = { ...mastered, ...progress }
+  const keys = Object.keys(combined).filter(k => !k.startsWith('_'))
+
+  // MC answered correctly at least once (single-char choice id)
+  const hasMC = keys.some(k => typeof combined[k] === 'string' && combined[k].length === 1)
   if (hasMC) earned.push('first_answer')
 
-  const sqlKeys = keys.filter(k => k.startsWith('sql_') && !!progress[k])
+  const sqlKeys = Object.keys(progress).filter(k => !k.startsWith('_') && k.startsWith('sql_') && !!progress[k])
   if (sqlKeys.length >= 1) earned.push('first_sql')
   if (sqlPracticesCount > 0 && sqlKeys.length >= sqlPracticesCount) earned.push('sql_module_complete')
 
-  const learnedFC = keys.filter(k => progress[k] === true).length
+  // Flashcards mastered = true in mastered (permanent) or progress (current session)
+  const learnedFC = new Set([
+    ...Object.keys(mastered).filter(k => mastered[k] === true),
+    ...Object.keys(progress).filter(k => !Object.prototype.hasOwnProperty.call(mastered, k) && progress[k] === true),
+  ]).size
   if (learnedFC >= 5) earned.push('flashcard_master')
 
   if (progress['_integrador_complete'] === true) earned.push('integrador_complete')

@@ -206,11 +206,9 @@ app.get('/api/progress', verifyToken, async (req, res) => {
 
 app.post('/api/progress', verifyToken, async (req, res) => {
   try {
-    const response = await axios.post(`${PROGRESS_SERVICE_URL}/progress/${req.user.sub}`, {
-      email: req.user.email,
-      name: req.user.name,
-      progress: req.body.progress
-    });
+    const body = { email: req.user.email, name: req.user.name, progress: req.body.progress };
+    if (req.body.mastered !== undefined) body.mastered = req.body.mastered;
+    const response = await axios.post(`${PROGRESS_SERVICE_URL}/progress/${req.user.sub}`, body);
     res.json(response.data);
   } catch (err) {
     console.error('Error saving progress:', err.message);

@@ -38,13 +38,19 @@ export const UserContext = createContext<UserContextType>({
 
 interface ProgressContextType {
   progress: Record<string, any>
-  saveProgress: (key: string, value: any) => void
+  mastered: Record<string, any>
+  saveProgress: (key: string, value: any, isCorrect?: boolean) => void
+  resetPractice: (practiceIds: string[]) => void
+  practiceResetKey: number
   loading: boolean
 }
 
 export const ProgressContext = createContext<ProgressContextType>({
   progress: {},
+  mastered: {},
   saveProgress: () => {},
+  resetPractice: () => {},
+  practiceResetKey: 0,
   loading: false
 })
 
@@ -141,6 +147,8 @@ function useAuth() {
 
 function ProgressProvider({ children, user }: { children: React.ReactNode; user: User }) {
   const [progress, setProgress] = useState<Record<string, any>>({})
+  const [mastered, setMastered] = useState<Record<string, any>>({})
+  const [practiceResetKey, setPracticeResetKey] = useState(0)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -151,29 +159,73 @@ function ProgressProvider({ children, user }: { children: React.ReactNode; user:
     })
       .then(r => r.json())
       .then(data => {
-        if (data.progress) setProgress(data.progress)
+        const prog = data.progress ?? {}
+        setProgress(prog)
+
+        if (data.mastered != null) {
+          setMastered(data.mastered)
+        } else {
+          // First-time migration: treat all existing practice answers as mastered
+          const practiceIdSet = new Set(quickPracticeData.map(item => item.id))
+          const migrated: Record<string, any> = {}
+          for (const [key, value] of Object.entries(prog)) {
+            if (practiceIdSet.has(key) && value !== false && value != null) {
+              migrated[key] = value
+            }
+          }
+          setMastered(migrated)
+          if (Object.keys(migrated).length > 0) {
+            fetch(`${GATEWAY_URL}/api/progress`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ mastered: migrated }),
+            }).catch(() => {})
+          }
+        }
       })
       .catch(err => console.error('Failed to load progress', err))
       .finally(() => setLoading(false))
   }, [user])
 
-  const saveProgress = (key: string, value: any) => {
+  const saveProgress = (key: string, value: any, isCorrect?: boolean) => {
     const token = sessionStorage.getItem(TOKEN_KEY)
     const newProgress = { ...progress, [key]: value }
     setProgress(newProgress)
 
+    let newMastered = mastered
+    if (isCorrect && !(key in mastered)) {
+      newMastered = { ...mastered, [key]: value }
+      setMastered(newMastered)
+    }
+
+    const body: Record<string, any> = { progress: newProgress }
+    if (newMastered !== mastered) body.mastered = newMastered
+
     fetch(`${GATEWAY_URL}/api/progress`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ progress: newProgress }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
     }).catch(err => console.error('Failed to save progress', err))
   }
 
+  const resetPractice = (practiceIds: string[]) => {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    const idSet = new Set(practiceIds)
+    const newProgress = Object.fromEntries(
+      Object.entries(progress).filter(([key]) => !idSet.has(key))
+    )
+    setProgress(newProgress)
+    setPracticeResetKey(k => k + 1)
+
+    fetch(`${GATEWAY_URL}/api/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ progress: newProgress }),
+    }).catch(err => console.error('Failed to reset practice', err))
+  }
+
   return (
-    <ProgressContext.Provider value={{ progress, saveProgress, loading }}>
+    <ProgressContext.Provider value={{ progress, mastered, saveProgress, resetPractice, practiceResetKey, loading }}>
       {children}
     </ProgressContext.Provider>
   )

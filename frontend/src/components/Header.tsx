@@ -1,4 +1,4 @@
-import { useContext, useState, useRef, useEffect } from 'react'
+import { useContext, useState, useRef, useEffect, useMemo } from 'react'
 import { ProgressContext, UserContext, ContentContext } from '../App'
 import { computeXP, getLevelInfo, computeBadges, BADGES } from '../utils/gamification'
 
@@ -8,15 +8,16 @@ interface HeaderProps {
 }
 
 export default function Header({ user, onLogout }: HeaderProps) {
-  const { progress } = useContext(ProgressContext)
+  const { progress, mastered } = useContext(ProgressContext)
   const { isAdmin } = useContext(UserContext)
-  const { questions, sqlPractices } = useContext(ContentContext)
+  const { questions, sqlPractices, quickPractice } = useContext(ContentContext)
   const [open, setOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const xp = computeXP(progress)
+  const practiceIds = useMemo(() => new Set(quickPractice.map(item => item.id)), [quickPractice])
+  const xp = computeXP(progress, mastered, practiceIds)
   const levelInfo = getLevelInfo(xp)
-  const earnedBadgeIds = computeBadges(progress, sqlPractices.length)
+  const earnedBadgeIds = computeBadges(progress, mastered, sqlPractices.length)
   const earnedBadges = BADGES.filter(b => earnedBadgeIds.includes(b.id))
   const isIntegradorComplete = progress['_integrador_complete'] === true
   const displayTitle = isIntegradorComplete

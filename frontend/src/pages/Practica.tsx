@@ -2,17 +2,64 @@ import { useState, useContext, useMemo } from 'react'
 import { ProgressContext, ContentContext } from '../App'
 import type { QuickPractice } from '../data/practice_quick'
 
+// --- Reset Button ---
+
+function ResetButton() {
+  const { resetPractice } = useContext(ProgressContext)
+  const { quickPractice } = useContext(ContentContext)
+  const [confirm, setConfirm] = useState(false)
+
+  const handleReset = () => {
+    resetPractice(quickPractice.map(item => item.id))
+    setConfirm(false)
+  }
+
+  if (confirm) {
+    return (
+      <div className="flex items-center gap-2 justify-center mt-4">
+        <span className="text-xs text-gray-500">¿Resetear toda la práctica?</span>
+        <button
+          onClick={handleReset}
+          className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors"
+        >
+          Sí, resetear
+        </button>
+        <button
+          onClick={() => setConfirm(false)}
+          className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          Cancelar
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setConfirm(true)}
+      className="mt-4 flex items-center gap-1.5 mx-auto px-4 py-2 text-xs font-bold text-gray-400 border border-gray-200 rounded-xl hover:border-red-200 hover:text-red-400 transition-colors"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      Resetear práctica
+    </button>
+  )
+}
+
 // --- Flashcard Component ---
 
 function FlashcardCarousel({ items }: { items: QuickPractice[] }) {
   const { progress, saveProgress } = useContext(ProgressContext)
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
+  const [mode, setMode] = useState<'random' | 'full'>('random')
 
-  // Seleccionar 5 aleatorias (o todas si son menos de 5)
-  const flashcards = useMemo(() => {
+  const randomFive = useMemo(() => {
     return [...items].sort(() => 0.5 - Math.random()).slice(0, 5)
   }, [items])
+
+  const flashcards = mode === 'full' ? items : randomFive
 
   if (flashcards.length === 0) return null
 
@@ -31,7 +78,14 @@ function FlashcardCarousel({ items }: { items: QuickPractice[] }) {
 
   const toggleLearned = (e: React.MouseEvent) => {
     e.stopPropagation()
-    saveProgress(current.id, !isLearned)
+    const newLearned = !isLearned
+    saveProgress(current.id, newLearned, newLearned)
+  }
+
+  const switchMode = (newMode: 'random' | 'full') => {
+    setMode(newMode)
+    setIndex(0)
+    setFlipped(false)
   }
 
   return (
@@ -41,9 +95,25 @@ function FlashcardCarousel({ items }: { items: QuickPractice[] }) {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
           Flashcards de Repaso
         </h3>
-        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-          {index + 1} / {flashcards.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-gray-100 rounded-lg p-0.5 text-[10px] font-bold">
+            <button
+              onClick={() => switchMode('random')}
+              className={`px-2.5 py-1 rounded-md transition-all ${mode === 'random' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              5 random
+            </button>
+            <button
+              onClick={() => switchMode('full')}
+              className={`px-2.5 py-1 rounded-md transition-all ${mode === 'full' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              todas ({items.length})
+            </button>
+          </div>
+          <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+            {index + 1} / {flashcards.length}
+          </span>
+        </div>
       </div>
 
       <div className="relative perspective-1000 h-64 w-full max-w-lg mx-auto">
@@ -99,7 +169,7 @@ function FactDimensionCard({ item }: { item: QuickPractice }) {
     if (selected) return
     setSelected(type)
     setShowExplanation(true)
-    saveProgress(item.id, type)
+    saveProgress(item.id, type, type === item.correctType)
   }
 
   const isCorrect = selected === item.correctType
@@ -174,7 +244,8 @@ function PracticeMCCard({ item }: { item: QuickPractice }) {
     if (selected) return
     setSelected(choiceId)
     setShowFeedback(true)
-    saveProgress(item.id, choiceId)
+    const correctChoice = item.choices?.find(c => c.correct)
+    saveProgress(item.id, choiceId, choiceId === correctChoice?.id)
   }
 
   const correctChoice = item.choices?.find(c => c.correct)
@@ -284,6 +355,7 @@ const TYPE_CONFIG: Record<string, { title: string; subtitle: string; icon: React
 
 export default function Practica() {
   const { quickPractice } = useContext(ContentContext)
+  const { practiceResetKey } = useContext(ProgressContext)
 
   const groups = useMemo(() => {
     return quickPractice.reduce((acc, item) => {
@@ -297,12 +369,13 @@ export default function Practica() {
   const typesOrdered = ['fact-dimension', 'multiple-choice', 'theory']
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-12 space-y-20">
+    <div key={practiceResetKey} className="max-w-5xl mx-auto px-4 py-12 space-y-20">
       <div className="text-center max-w-2xl mx-auto">
         <h2 className="text-4xl font-black text-ub-dark tracking-tight">Entrenamiento DWH</h2>
         <p className="text-gray-500 mt-4 text-lg">
           Un espacio interactivo para dominar los conceptos de Data Warehousing mediante la práctica activa.
         </p>
+        <ResetButton />
       </div>
 
       {flashcards.length > 0 && (

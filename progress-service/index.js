@@ -19,6 +19,7 @@ const progressSchema = new mongoose.Schema({
   name: String,
   role: { type: String, enum: ['student', 'admin'], default: 'student' },
   progress: { type: Map, of: mongoose.Schema.Types.Mixed },
+  mastered: { type: Map, of: mongoose.Schema.Types.Mixed },
   lastUpdated: { type: Date, default: Date.now }
 });
 
@@ -143,9 +144,10 @@ app.get('/progress/:userId', async (req, res) => {
 
 app.post('/progress/:userId', async (req, res) => {
   try {
-    const { email, name, progress, role } = req.body;
+    const { email, name, progress, mastered, role } = req.body;
     const updateFields = { email, name, lastUpdated: Date.now() };
     if (progress !== undefined) updateFields.progress = progress;
+    if (mastered !== undefined) updateFields.mastered = mastered;
     if (role !== undefined) updateFields.role = role;
 
     // Only set role on insert (new users), existing users keep their role unless explicitly passed
@@ -196,7 +198,7 @@ app.delete('/progress/:userId', async (req, res) => {
   try {
     const result = await Progress.findOneAndUpdate(
       { userId: req.params.userId },
-      { $set: { progress: {}, lastUpdated: Date.now() } },
+      { $set: { progress: {}, mastered: {}, lastUpdated: Date.now() } },
       { new: true }
     );
     if (!result) return res.status(404).json({ error: 'User not found' });
