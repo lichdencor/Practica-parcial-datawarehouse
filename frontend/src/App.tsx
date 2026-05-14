@@ -5,6 +5,8 @@ import Header from './components/Header'
 import Navbar from './components/Navbar'
 import AppRouter from './AppRouter'
 import { examSections } from './data/questions'
+import type { ExamSection, SqlExercise } from './data/questions'
+import { SCHEMAS } from './data/sql_schemas'
 import { theoryConcepts } from './data/theory'
 import { quickPracticeData } from './data/practice_quick'
 import { sqlPracticeData } from './data/sql_practice'
@@ -262,10 +264,42 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
       fetchContent('sqlPractices'),
       fetchContent('glossary'),
     ]).then(([q, t, p, s, g]) => {
-      if (q) setQuestions(q)
+      if (q) {
+        // Merge setupSql/verifyQuery from static examSections into MongoDB records that are missing them.
+        // SQL schemas live in source code (not Mongo) so they don't bloat the stored document.
+        const mergedQ = q.map((section: ExamSection) => {
+          if (section.type !== 'sql-shell' || !section.sqlExercises) return section
+          const staticSection = examSections.find(s => s.id === section.id)
+          const mergedExercises = section.sqlExercises.map((ex: SqlExercise) => {
+            const staticEx = staticSection?.sqlExercises?.find(se => se.id === ex.id)
+            const resolvedSetup = ex.setupSql ?? staticEx?.setupSql ?? (ex.schemaRef ? SCHEMAS[ex.schemaRef] : undefined)
+            return {
+              ...ex,
+              setupSql: resolvedSetup,
+              verifyQuery: ex.verifyQuery ?? staticEx?.verifyQuery,
+            }
+          })
+          return { ...section, sqlExercises: mergedExercises }
+        })
+        setQuestions(mergedQ)
+      }
       if (t) setTheory(t)
       if (p) setQuickPractice(p)
-      if (s) setSqlPractices(s)
+      if (s) {
+        // Merge static setupSql/verifyQuery into MongoDB records that are missing them.
+        // This keeps SQL schemas in source code (not in Mongo) while allowing new
+        // exercises added via Admin to carry their own setupSql string.
+        const merged = s.map((practice: typeof sqlPracticeData[number]) => {
+          const staticFallback = sqlPracticeData.find(sp => sp.id === practice.id)
+          const resolvedSetup = practice.setupSql ?? staticFallback?.setupSql ?? (practice.schemaRef ? SCHEMAS[practice.schemaRef] : undefined)
+          return {
+            ...practice,
+            setupSql: resolvedSetup,
+            verifyQuery: practice.verifyQuery ?? staticFallback?.verifyQuery,
+          }
+        })
+        setSqlPractices(merged)
+      }
       if (g) setGlossary(g)
     })
   }, [])

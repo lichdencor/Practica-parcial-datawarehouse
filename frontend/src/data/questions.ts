@@ -1,3 +1,5 @@
+import { SCHEMA_P8, SCHEMA_P10 } from './sql_schemas'
+
 export interface Choice {
   id: string
   text: string
@@ -33,6 +35,9 @@ export interface SqlExercise {
   dimensions: string[]
   hint: string
   referenceQuery: string
+  setupSql?: string     // DDL + seed data para ejecución in-browser con sql.js
+  verifyQuery?: string  // Query de verificación para ejercicios INSERT/DDL (en lugar de comparar result set directo)
+  schemaRef?: string    // Referencia a SCHEMAS[key] en sql_schemas.ts — alternativa a embeber setupSql en Mongo
 }
 
 export interface ExamSection {
@@ -438,6 +443,7 @@ FROM FACT_VENTA_FACTURA vf
   JOIN Dim_Marca     m ON p.id_marca      = m.id_marca
 GROUP BY c.nombre_cat, m.nombre_mar
 ORDER BY categoria, marca;`,
+        setupSql: SCHEMA_P8,
       },
       {
         id: 'p8m2',
@@ -456,6 +462,7 @@ FROM FACT_VENTA_FACTURA vf
   JOIN Dim_Cliente  c  ON vf.id_cliente  = c.id_cliente
 GROUP BY s.nombre_suc, e.nombre_emp, c.nombre
 ORDER BY sucursal, empleado, cliente;`,
+        setupSql: SCHEMA_P8,
       },
       {
         id: 'p8m3',
@@ -475,6 +482,7 @@ FROM FACT_VENTA_FACTURA vf
   JOIN Dim_Categoria c ON p.id_categoria = c.id_categoria
 GROUP BY t.anio, t.trimestre, c.nombre_cat
 ORDER BY t.anio, t.trimestre, categoria;`,
+        setupSql: SCHEMA_P8,
       },
     ],
   },
@@ -591,6 +599,7 @@ FROM FACT_VENTAS f
 WHERE t.anio = 2023
 GROUP BY p.nombre, b.nombre
 ORDER BY ventas_totales DESC;`,
+        setupSql: SCHEMA_P10,
       },
       {
         id: 'p10m2',
@@ -610,6 +619,7 @@ FROM FACT_VENTAS f
 WHERE t.anio = 2023
 GROUP BY pr.nombre, t.anio, b.nombre
 ORDER BY valor_total_compras DESC;`,
+        setupSql: SCHEMA_P10,
       },
       {
         id: 'p10m3',
@@ -629,6 +639,7 @@ FROM FACT_VENTAS f
   JOIN Dim_Bodega   b ON f.bodega_codigo   = b.codigo
 GROUP BY c.nombre, p.categoria, p.nombre
 ORDER BY cliente, categoria_producto;`,
+        setupSql: SCHEMA_P10,
       },
     ],
   },

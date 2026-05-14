@@ -16,7 +16,9 @@ export default function Ejercicios() {
     description: selectedPractice.objective,
     dimensions: [selectedPractice.difficulty.toUpperCase()],
     hint: selectedPractice.hint,
-    referenceQuery: selectedPractice.referenceQuery
+    referenceQuery: selectedPractice.referenceQuery,
+    setupSql: selectedPractice.setupSql,
+    verifyQuery: selectedPractice.verifyQuery,
   } : null
 
   const difficultyColors = {

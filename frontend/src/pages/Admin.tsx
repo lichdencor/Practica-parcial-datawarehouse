@@ -7,6 +7,7 @@ import { sqlPracticeData } from '../data/sql_practice'
 import { glossaryData } from '../data/glossary'
 import DwhDiagramBuilder from '../components/DwhDiagramBuilder'
 import Modal from '../components/Modal'
+import SqlCreatorSection from '../components/SqlCreatorSection'
 import type { DwhDiagramConfig } from '../data/questions'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
@@ -472,11 +473,13 @@ function ContentEditor({ contentKey, label, description, currentData }: {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  const isSqlPractices = contentKey === 'sqlPractices'
+
   const handleEdit = () => {
     setTempData(JSON.parse(JSON.stringify(currentData)))
     setJsonText(JSON.stringify(currentData, null, 2))
     setEditing(true)
-    setMode('visual')
+    setMode(isSqlPractices ? 'visual' : 'visual')
     setError(null)
     setSuccess(false)
   }
@@ -583,24 +586,26 @@ function ContentEditor({ contentKey, label, description, currentData }: {
 
       {editing && (
         <div className="mt-4">
-          <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
-            <button
-              onClick={() => setMode('visual')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-                mode === 'visual' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Visual
-            </button>
-            <button
-              onClick={() => setMode('json')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-                mode === 'json' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              JSON Raw
-            </button>
-          </div>
+          {!isSqlPractices && (
+            <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
+              <button
+                onClick={() => setMode('visual')}
+                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  mode === 'visual' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Visual
+              </button>
+              <button
+                onClick={() => setMode('json')}
+                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  mode === 'json' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                JSON Raw
+              </button>
+            </div>
+          )}
 
           {error && (
             <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-xs font-medium">
@@ -721,12 +726,38 @@ function ContentEditor({ contentKey, label, description, currentData }: {
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Esquema (Opcional)</label>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Esquema visual (Opcional)</label>
                         <textarea
                           value={item.schema}
                           onChange={e => updateItem(idx, { ...item, schema: e.target.value })}
-                          className="w-full text-[10px] font-mono p-2 rounded border border-gray-200 h-20 focus:outline-none focus:border-ub-mid bg-gray-50"
-                          placeholder="CREATE TABLE ... "
+                          className="w-full text-[10px] font-mono p-2 rounded border border-gray-200 h-16 focus:outline-none focus:border-ub-mid bg-gray-50"
+                          placeholder="CREATE TABLE ... (solo para mostrar al alumno)"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">
+                          Setup SQL — sql.js
+                          <span className="ml-1 normal-case font-normal text-gray-300">(CREATE TABLE + INSERT para ejecución real)</span>
+                        </label>
+                        <textarea
+                          value={item.setupSql ?? ''}
+                          onChange={e => updateItem(idx, { ...item, setupSql: e.target.value })}
+                          className="w-full text-[10px] font-mono p-2 rounded border border-gray-700 h-24 focus:outline-none focus:border-ub-mid bg-gray-900 text-green-300 resize-y"
+                          placeholder="CREATE TABLE TMP_VENTAS (...);\nINSERT INTO TMP_VENTAS VALUES ..."
+                          spellCheck={false}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">
+                          Verify Query — opcional
+                          <span className="ml-1 normal-case font-normal text-gray-300">(para INSERT/DDL)</span>
+                        </label>
+                        <textarea
+                          value={item.verifyQuery ?? ''}
+                          onChange={e => updateItem(idx, { ...item, verifyQuery: e.target.value })}
+                          className="w-full text-[10px] font-mono p-2 rounded border border-gray-700 h-10 focus:outline-none focus:border-ub-mid bg-gray-900 text-green-300"
+                          placeholder="SELECT * FROM TMP_VENTAS ORDER BY id_venta;"
+                          spellCheck={false}
                         />
                       </div>
                     </div>
@@ -1555,7 +1586,7 @@ function EsquemasSection() {
 
 export default function Admin() {
   const { questions, theory, quickPractice, sqlPractices, glossary } = useContext(ContentContext)
-  const [tab, setTab] = useState<'users' | 'content' | 'esquemas' | 'organica'>('users')
+  const [tab, setTab] = useState<'users' | 'content' | 'esquemas' | 'organica' | 'sqlcreator'>('users')
 
   const currentData = { questions, theory, quickPractice, sqlPractices, glossary }
 
@@ -1603,6 +1634,14 @@ export default function Admin() {
         >
           Esquemas DWH
         </button>
+        <button
+          onClick={() => setTab('sqlcreator')}
+          className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            tab === 'sqlcreator' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          SQL Creator
+        </button>
       </div>
 
       {tab === 'users' && (
@@ -1647,6 +1686,19 @@ export default function Admin() {
             Armá diagramas DWH visualmente. Podés editar los esquemas existentes o crear nuevos ejercicios de tipo "Esquema + Preguntas" donde el alumno ve el diagrama y responde preguntas sobre él.
           </p>
           <EsquemasSection />
+        </div>
+      )}
+
+      {tab === 'sqlcreator' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <div className="flex items-center gap-3 mb-1">
+            <h3 className="font-bold text-gray-800">SQL Creator</h3>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-green-100 text-green-700">sql.js</span>
+          </div>
+          <p className="text-gray-400 text-xs mb-6">
+            Creá ejercicios SQL con validación en tiempo real. El validador ejecuta tu setup + query en SQLite (in-browser) antes de guardar. El ID generado puede embeberse en los JSON del integrador.
+          </p>
+          <SqlCreatorSection />
         </div>
       )}
     </div>

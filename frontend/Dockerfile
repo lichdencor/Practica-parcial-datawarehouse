@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json .
 RUN npm install
 COPY . .
+RUN mkdir -p public && cp node_modules/sql.js/dist/sql-wasm.wasm public/
 ARG VITE_GATEWAY_URL=http://localhost:3001
 ENV VITE_GATEWAY_URL=$VITE_GATEWAY_URL
 RUN npm run build

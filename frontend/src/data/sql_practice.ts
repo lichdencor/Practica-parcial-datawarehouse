@@ -1,3 +1,5 @@
+import { SCHEMA_BASIC1, SCHEMA_JOIN1, SCHEMA_DWH1 } from './sql_schemas'
+
 export type SqlDifficulty = 'facil' | 'intermedio' | 'avanzado' | 'reto'
 
 export interface SqlPractice {
@@ -8,7 +10,10 @@ export interface SqlPractice {
   objective: string
   hint: string
   referenceQuery: string
-  schema?: string // Para mostrar el contexto de las tablas
+  schema?: string
+  setupSql?: string    // DDL + seed data para sql.js
+  verifyQuery?: string // Query post-ejecución para INSERT/DDL
+  schemaRef?: string   // Referencia a SCHEMAS[key] en sql_schemas.ts
 }
 
 export const sqlPracticeData: SqlPractice[] = [
@@ -20,6 +25,8 @@ export const sqlPracticeData: SqlPractice[] = [
     objective: 'Escribí una sentencia para seleccionar la base de datos "STAGING_DWH" e insertá un registro en la tabla "TMP_VENTAS" con las columnas id_venta (1) y monto (500).',
     hint: 'Usá USE <db>; y luego INSERT INTO <tabla> (cols) VALUES (vals);',
     referenceQuery: 'USE STAGING_DWH;\nINSERT INTO TMP_VENTAS (id_venta, monto) VALUES (1, 500);',
+    setupSql: SCHEMA_BASIC1,
+    verifyQuery: 'SELECT * FROM TMP_VENTAS ORDER BY id_venta;',
   },
   {
     id: 'sql_join_1',
@@ -27,8 +34,9 @@ export const sqlPracticeData: SqlPractice[] = [
     title: 'Dominando los JOINS: Hechos y Dimensiones',
     description: 'La esencia del SQL analítico es unir la tabla FACT con sus dimensiones.',
     objective: 'Consultá el total de ventas (monto) de la tabla FACT_VENTAS uniendo con la dimensión Dim_Producto para filtrar solo los productos de la categoría "Electrónica".',
-    hint: 'Necesitás un JOIN entre FACT_VENTAS (fv) y Dim_Producto (p) por id_producto. Usá SUM() y WHERE p.categoria = "Electrónica".',
-    referenceQuery: 'SELECT SUM(fv.monto) FROM FACT_VENTAS fv JOIN Dim_Producto p ON fv.id_producto = p.id_producto WHERE p.categoria = "Electrónica";',
+    hint: "Necesitás un JOIN entre FACT_VENTAS (fv) y Dim_Producto (p) por id_producto. Usá SUM() y WHERE p.categoria = 'Electrónica'.",
+    referenceQuery: "SELECT SUM(fv.monto) FROM FACT_VENTAS fv JOIN Dim_Producto p ON fv.id_producto = p.id_producto WHERE p.categoria = 'Electrónica';",
+    setupSql: SCHEMA_JOIN1,
   },
   {
     id: 'sql_dwh_1',
@@ -51,5 +59,7 @@ export const sqlPracticeData: SqlPractice[] = [
   FOREIGN KEY (id_cliente) REFERENCES Dim_Cliente(id_cliente),
   FOREIGN KEY (id_promocion) REFERENCES Dim_Promocion(id_promocion)
 );`,
-  }
+    setupSql: SCHEMA_DWH1,
+    verifyQuery: `SELECT name FROM pragma_table_info('FACT_RETAIL') ORDER BY name;`,
+  },
 ]
