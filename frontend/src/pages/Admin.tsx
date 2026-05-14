@@ -8,6 +8,7 @@ import { glossaryData } from '../data/glossary'
 import DwhDiagramBuilder from '../components/DwhDiagramBuilder'
 import Modal from '../components/Modal'
 import SqlCreatorSection from '../components/SqlCreatorSection'
+import OlapToDwhCreator from '../components/OlapToDwhCreator'
 import type { DwhDiagramConfig } from '../data/questions'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
@@ -1586,7 +1587,7 @@ function EsquemasSection() {
 
 export default function Admin() {
   const { questions, theory, quickPractice, sqlPractices, glossary } = useContext(ContentContext)
-  const [tab, setTab] = useState<'users' | 'content' | 'esquemas' | 'organica' | 'sqlcreator'>('users')
+  const [tab, setTab] = useState<'users' | 'content' | 'esquemas' | 'organica' | 'sqlcreator' | 'olapdwh'>('users')
 
   const currentData = { questions, theory, quickPractice, sqlPractices, glossary }
 
@@ -1641,6 +1642,14 @@ export default function Admin() {
           }`}
         >
           SQL Creator
+        </button>
+        <button
+          onClick={() => setTab('olapdwh')}
+          className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            tab === 'olapdwh' ? 'bg-white text-ub-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          OLAP→DWH
         </button>
       </div>
 
@@ -1699,6 +1708,19 @@ export default function Admin() {
             Creá ejercicios SQL con validación en tiempo real. El validador ejecuta tu setup + query en SQLite (in-browser) antes de guardar. El ID generado puede embeberse en los JSON del integrador.
           </p>
           <SqlCreatorSection />
+        </div>
+      )}
+
+      {tab === 'olapdwh' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <div className="flex items-center gap-3 mb-1">
+            <h3 className="font-bold text-gray-800">OLAP → DWH Creator</h3>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">nuevo</span>
+          </div>
+          <p className="text-gray-400 text-xs mb-6">
+            Creá ejercicios donde el alumno transforma un modelo OLAP normalizado en un esquema DWH estrella. Definí las tablas OLAP de entrada y el DWH esperado como respuesta correcta.
+          </p>
+          <OlapToDwhCreator />
         </div>
       )}
     </div>

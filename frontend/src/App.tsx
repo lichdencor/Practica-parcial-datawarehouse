@@ -11,6 +11,8 @@ import { theoryConcepts } from './data/theory'
 import { quickPracticeData } from './data/practice_quick'
 import { sqlPracticeData } from './data/sql_practice'
 import { glossaryData } from './data/glossary'
+import { olapToDwhExercises as olapToDwhData } from './data/olap_dwh_exercises'
+import type { OlapToDwhExercise } from './data/olap_dwh_exercises'
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
 const TOKEN_KEY = 'parcial_dbs2_token'
@@ -63,6 +65,7 @@ type TheoryConcepts = typeof theoryConcepts
 type QuickPracticeData = typeof quickPracticeData
 type SqlPractices = typeof sqlPracticeData
 type GlossaryData = typeof glossaryData
+type OlapToDwhExercises = OlapToDwhExercise[]
 
 interface ContentContextType {
   questions: ExamSections
@@ -70,7 +73,8 @@ interface ContentContextType {
   quickPractice: QuickPracticeData
   sqlPractices: SqlPractices
   glossary: GlossaryData
-  saveContent: (type: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices' | 'glossary', data: any) => Promise<void>
+  olapToDwhExercises: OlapToDwhExercises
+  saveContent: (type: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices' | 'glossary' | 'olapToDwh', data: any) => Promise<void>
 }
 
 export const ContentContext = createContext<ContentContextType>({
@@ -79,6 +83,7 @@ export const ContentContext = createContext<ContentContextType>({
   quickPractice: quickPracticeData,
   sqlPractices: sqlPracticeData,
   glossary: glossaryData,
+  olapToDwhExercises: olapToDwhData,
   saveContent: async () => {},
 })
 
@@ -241,6 +246,7 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
   const [quickPractice, setQuickPractice] = useState<QuickPracticeData>(quickPracticeData)
   const [sqlPractices, setSqlPractices] = useState<SqlPractices>(sqlPracticeData)
   const [glossary, setGlossary] = useState<GlossaryData>(glossaryData)
+  const [olapToDwhExercises, setOlapToDwhExercises] = useState<OlapToDwhExercises>(olapToDwhData)
 
   useEffect(() => {
     const token = sessionStorage.getItem(TOKEN_KEY)
@@ -263,7 +269,8 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
       fetchContent('quickPractice'),
       fetchContent('sqlPractices'),
       fetchContent('glossary'),
-    ]).then(([q, t, p, s, g]) => {
+      fetchContent('olapToDwh'),
+    ]).then(([q, t, p, s, g, olap]) => {
       if (q) {
         // Merge setupSql/verifyQuery from static examSections into MongoDB records that are missing them.
         // SQL schemas live in source code (not Mongo) so they don't bloat the stored document.
@@ -301,10 +308,11 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
         setSqlPractices(merged)
       }
       if (g) setGlossary(g)
+      if (olap) setOlapToDwhExercises(olap)
     })
   }, [])
 
-  const saveContent = async (type: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices' | 'glossary', data: any) => {
+  const saveContent = async (type: 'questions' | 'theory' | 'quickPractice' | 'sqlPractices' | 'glossary' | 'olapToDwh', data: any) => {
     const token = sessionStorage.getItem(TOKEN_KEY)
     const res = await fetch(`${GATEWAY_URL}/api/admin/content/${type}`, {
       method: 'PUT',
@@ -321,10 +329,11 @@ function ContentProvider({ children }: { children: React.ReactNode }) {
     if (type === 'quickPractice') setQuickPractice(data)
     if (type === 'sqlPractices') setSqlPractices(data)
     if (type === 'glossary') setGlossary(data)
+    if (type === 'olapToDwh') setOlapToDwhExercises(data)
   }
 
   return (
-    <ContentContext.Provider value={{ questions, theory, quickPractice, sqlPractices, glossary, saveContent }}>
+    <ContentContext.Provider value={{ questions, theory, quickPractice, sqlPractices, glossary, olapToDwhExercises, saveContent }}>
       {children}
     </ContentContext.Provider>
   )

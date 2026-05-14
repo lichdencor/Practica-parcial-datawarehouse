@@ -4,6 +4,7 @@ import { UserContext } from './App'
 import Conceptos from './pages/Conceptos'
 import Practica from './pages/Practica'
 import Ejercicios from './pages/Ejercicios'
+import OlapToDwh from './pages/OlapToDwh'
 import Integrador from './pages/Integrador'
 import Glosario from './pages/Glosario'
 import Cronometrado from './pages/Cronometrado'
@@ -20,6 +21,7 @@ export default function AppRouter() {
       <Route path="/conceptos" element={<Conceptos />} />
       <Route path="/practica" element={<Practica />} />
       <Route path="/ejercicios" element={<Ejercicios />} />
+      <Route path="/olap-dwh" element={<OlapToDwh />} />
       <Route path="/integrador" element={<Integrador />} />
       <Route path="/glosario" element={<Glosario />} />
       <Route path="/cronometrado" element={<Cronometrado />} />
