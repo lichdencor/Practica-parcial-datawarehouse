@@ -233,6 +233,107 @@ app.put('/content/:type', async (req, res) => {
   }
 });
 
+// --- SQL Semantic Validation ---
+
+function normalizeSql(sql) {
+  return sql
+    .replace(/--[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/;\s*$/, '');
+}
+
+function extractTables(sql) {
+  const tables = new Set();
+  const re = /(?:from|join)\s+(\w+)(?:\s+(?:as\s+)?\w+)?/gi;
+  let m;
+  while ((m = re.exec(sql)) !== null) {
+    tables.add(m[1].toLowerCase());
+  }
+  return tables;
+}
+
+function extractAggregations(sql) {
+  const aggs = new Set();
+  const re = /\b(sum|count|avg|max|min)\s*\(/gi;
+  let m;
+  while ((m = re.exec(sql)) !== null) {
+    aggs.add(m[1].toLowerCase());
+  }
+  return aggs;
+}
+
+function extractGroupBy(sql) {
+  const m = sql.match(/\bgroup\s+by\b([\s\S]+?)(?=\border\s+by\b|\bhaving\b|\blimit\b|$)/i);
+  if (!m) return new Set();
+  return new Set(
+    m[1].split(',').map(c => {
+      const col = c.trim();
+      return col.includes('.') ? col.split('.').pop().trim() : col;
+    })
+  );
+}
+
+app.post('/sql/validate', async (req, res) => {
+  const { userQuery, referenceQuery } = req.body;
+  if (!userQuery || !referenceQuery) {
+    return res.status(400).json({ error: 'Missing userQuery or referenceQuery' });
+  }
+
+  const userNorm = normalizeSql(userQuery);
+  const refNorm = normalizeSql(referenceQuery);
+
+  if (userNorm === refNorm) {
+    return res.json({
+      match: 'exact',
+      score: 100,
+      feedback: ['Tu consulta coincide exactamente con la referencia.'],
+      details: { missingTables: [], extraTables: [], missingAggs: [], missingGroupBy: [] },
+    });
+  }
+
+  const userTables = extractTables(userNorm);
+  const refTables = extractTables(refNorm);
+  const userAggs = extractAggregations(userNorm);
+  const refAggs = extractAggregations(refNorm);
+  const userGroupBy = extractGroupBy(userNorm);
+  const refGroupBy = extractGroupBy(refNorm);
+
+  const missingTables = [...refTables].filter(t => !userTables.has(t));
+  const extraTables = [...userTables].filter(t => !refTables.has(t));
+  const missingAggs = [...refAggs].filter(a => !userAggs.has(a));
+  const missingGroupBy = [...refGroupBy].filter(c => !userGroupBy.has(c));
+
+  const feedback = [];
+  let issues = missingTables.length + missingAggs.length + missingGroupBy.length;
+
+  if (missingTables.length > 0)
+    feedback.push(`Faltan tablas o JOINs: ${missingTables.join(', ')}`);
+  if (extraTables.length > 0)
+    feedback.push(`Tablas no esperadas (puede ser alias distinto): ${extraTables.join(', ')}`);
+  if (missingAggs.length > 0)
+    feedback.push(`Faltan funciones de agregación: ${missingAggs.map(a => a.toUpperCase() + '()').join(', ')}`);
+  if (missingGroupBy.length > 0)
+    feedback.push(`Columnas faltantes en GROUP BY: ${missingGroupBy.join(', ')}`);
+
+  let match, score;
+  if (issues === 0 && extraTables.length === 0) {
+    match = 'structural';
+    score = 90;
+    feedback.unshift('Estructura correcta: tablas, agregaciones y agrupamientos coinciden con la referencia.');
+  } else if (issues <= 1) {
+    match = 'partial';
+    score = 60;
+  } else {
+    match = 'different';
+    score = Math.max(10, 50 - issues * 10);
+  }
+
+  res.json({ match, score, feedback, details: { missingTables, extraTables, missingAggs, missingGroupBy } });
+});
+
 app.listen(PORT, () => {
   console.log(`Progress service running on port ${PORT}`);
 });

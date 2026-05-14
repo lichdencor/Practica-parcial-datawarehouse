@@ -2,13 +2,20 @@ import { useState, useEffect, useContext } from 'react'
 import type { SqlExercise } from '../data/questions'
 import { ProgressContext } from '../App'
 
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
+const TOKEN_KEY = 'parcial_dbs2_token'
+
 interface SqlResult {
   valid: boolean
   errors: string[]
   warnings: string[]
+  checking: boolean
+  match?: 'exact' | 'structural' | 'partial' | 'different'
+  score?: number
+  semanticFeedback?: string[]
 }
 
-function checkSql(sql: string): SqlResult {
+function checkSql(sql: string): Omit<SqlResult, 'checking'> {
   const errors: string[] = []
   const warnings: string[] = []
   const trimmed = sql.trim()
@@ -19,12 +26,10 @@ function checkSql(sql: string): SqlResult {
 
   const upper = trimmed.toUpperCase()
 
-  // Must start with valid keyword
   if (!/^(SELECT|WITH|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)\b/.test(upper)) {
     errors.push('La consulta debe comenzar con una palabra clave SQL válida (SELECT, WITH, INSERT, etc.)')
   }
 
-  // Balanced parentheses
   let depth = 0
   for (const ch of trimmed) {
     if (ch === '(') depth++
@@ -33,36 +38,45 @@ function checkSql(sql: string): SqlResult {
   }
   if (depth > 0) errors.push(`Hay ${depth} paréntesis sin cerrar.`)
 
-  // SELECT without FROM
   if (/\bSELECT\b/i.test(trimmed) && !/\bFROM\b/i.test(trimmed)) {
     errors.push('Un SELECT requiere una cláusula FROM.')
   }
 
-  // JOIN sin ON
   const joinCount = (trimmed.match(/\b(INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|JOIN)\b/gi) || []).length
   const onCount = (trimmed.match(/\bON\b/gi) || []).length
   if (joinCount > 0 && onCount < joinCount) {
     errors.push(`Hay ${joinCount} JOIN(s) pero solo ${onCount} cláusula(s) ON. Verificá que cada JOIN tenga su condición ON.`)
   }
 
-  // GROUP BY sin SELECT con agregación
   if (/\bGROUP\s+BY\b/i.test(trimmed)) {
     if (!/\b(SUM|COUNT|AVG|MAX|MIN)\s*\(/i.test(trimmed)) {
       warnings.push('Usás GROUP BY pero no hay funciones de agregación (SUM, COUNT, AVG, MAX, MIN). ¿Es intencional?')
     }
   }
 
-  // ORDER BY referencia a alias o columna
   if (/\bORDER\s+BY\b/i.test(trimmed) && !/\bSELECT\b/i.test(trimmed)) {
     errors.push('ORDER BY sin SELECT.')
   }
 
-  // Terminación con punto y coma (recomendado)
   if (!trimmed.endsWith(';')) {
     warnings.push('Se recomienda terminar la consulta con punto y coma (;).')
   }
 
   return { valid: errors.length === 0, errors, warnings }
+}
+
+const matchConfig = {
+  exact:       { bg: 'bg-green-50 border-green-200',  label: 'text-green-700',  icon: '✓', badge: 'bg-green-100 text-green-800' },
+  structural:  { bg: 'bg-green-50 border-green-200',  label: 'text-green-700',  icon: '✓', badge: 'bg-green-100 text-green-800' },
+  partial:     { bg: 'bg-amber-50 border-amber-200',  label: 'text-amber-700',  icon: '⚠', badge: 'bg-amber-100 text-amber-800' },
+  different:   { bg: 'bg-red-50 border-red-200',      label: 'text-red-700',    icon: '✗', badge: 'bg-red-100 text-red-800' },
+}
+
+const matchLabel = {
+  exact:      'Consulta correcta (100%)',
+  structural: 'Estructura correcta',
+  partial:    'Parcialmente correcta',
+  different:  'Estructura incorrecta',
 }
 
 function ExerciseShell({ exercise }: { exercise: SqlExercise }) {
@@ -77,9 +91,42 @@ function ExerciseShell({ exercise }: { exercise: SqlExercise }) {
     }
   }, [progress, exercise.id])
 
-  const handleRun = () => {
-    setResult(checkSql(sql))
+  const handleRun = async () => {
+    const syntax = checkSql(sql)
+    setResult({ ...syntax, checking: syntax.valid })
     saveProgress(exercise.id, sql)
+
+    if (!syntax.valid) return
+
+    try {
+      const token = sessionStorage.getItem(TOKEN_KEY)
+      const res = await fetch(`${GATEWAY_URL}/api/sql/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          exerciseId: exercise.id,
+          userQuery: sql,
+          referenceQuery: exercise.referenceQuery,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setResult(prev => prev ? {
+          ...prev,
+          checking: false,
+          match: data.match,
+          score: data.score,
+          semanticFeedback: data.feedback,
+        } : null)
+      } else {
+        setResult(prev => prev ? { ...prev, checking: false } : null)
+      }
+    } catch {
+      setResult(prev => prev ? { ...prev, checking: false } : null)
+    }
   }
 
   const handleClear = () => {
@@ -136,12 +183,25 @@ function ExerciseShell({ exercise }: { exercise: SqlExercise }) {
         <div className="flex gap-2 mt-2">
           <button
             onClick={handleRun}
-            className="bg-ub-mid hover:bg-ub-dark text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            disabled={result?.checking}
+            className="bg-ub-mid hover:bg-ub-dark disabled:opacity-60 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-            </svg>
-            Ejecutar / Validar
+            {result?.checking ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Verificando...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                </svg>
+                Ejecutar / Validar
+              </>
+            )}
           </button>
           <button
             onClick={handleClear}
@@ -159,23 +219,52 @@ function ExerciseShell({ exercise }: { exercise: SqlExercise }) {
 
         {/* Validation result */}
         {result && (
-          <div className={`mt-3 rounded-lg p-3 text-sm ${result.valid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-            <div className={`font-semibold mb-1 ${result.valid ? 'text-green-700' : 'text-red-700'}`}>
-              {result.valid ? '✓ Sintaxis correcta' : '✗ Errores de sintaxis'}
+          <div className="mt-3 space-y-2">
+            {/* Syntax panel */}
+            <div className={`rounded-lg p-3 text-sm border ${result.valid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <div className={`font-semibold mb-1 ${result.valid ? 'text-green-700' : 'text-red-700'}`}>
+                {result.valid ? '✓ Sintaxis correcta' : '✗ Errores de sintaxis'}
+              </div>
+              {result.errors.map((e, i) => (
+                <p key={i} className="text-red-700 text-xs">• {e}</p>
+              ))}
+              {result.warnings.map((w, i) => (
+                <p key={i} className="text-amber-700 text-xs">⚠ {w}</p>
+              ))}
             </div>
-            {result.errors.map((e, i) => (
-              <p key={i} className="text-red-700 text-xs">• {e}</p>
-            ))}
-            {result.warnings.map((w, i) => (
-              <p key={i} className="text-amber-700 text-xs">⚠ {w}</p>
-            ))}
-            {result.valid && (
-              <p className="text-green-600 text-xs">
-                La consulta tiene estructura SQL válida.
-                {result.warnings.length === 0
-                  ? ' Sin advertencias.'
-                  : ` (${result.warnings.length} advertencia(s) menor(es))`}
-              </p>
+
+            {/* Semantic panel */}
+            {result.valid && !result.checking && result.match && (() => {
+              const m = result.match!
+              const cfg = matchConfig[m]
+              return (
+                <div className={`rounded-lg p-3 text-sm border ${cfg.bg}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`font-semibold ${cfg.label}`}>
+                      {cfg.icon} Comparación con referencia: {matchLabel[m]}
+                    </span>
+                    {result.score !== undefined && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cfg.badge}`}>
+                        {result.score}%
+                      </span>
+                    )}
+                  </div>
+                  {result.semanticFeedback?.map((f, i) => (
+                    <p key={i} className={`text-xs mt-0.5 ${cfg.label}`}>• {f}</p>
+                  ))}
+                </div>
+              )
+            })()}
+
+            {/* Checking indicator */}
+            {result.valid && result.checking && (
+              <div className="rounded-lg p-3 text-sm border bg-blue-50 border-blue-200 text-blue-700 text-xs flex items-center gap-2">
+                <svg className="w-3 h-3 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Comparando con la consulta de referencia...
+              </div>
             )}
           </div>
         )}

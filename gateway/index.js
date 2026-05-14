@@ -241,6 +241,21 @@ app.put('/api/admin/content/:type', verifyToken, requireAdmin, async (req, res) 
   }
 });
 
+// --- SQL Validation ---
+
+app.post('/api/sql/validate', verifyToken, async (req, res) => {
+  try {
+    const { exerciseId, userQuery, referenceQuery } = req.body;
+    const response = await axios.post(`${PROGRESS_SERVICE_URL}/sql/validate`, {
+      exerciseId, userQuery, referenceQuery,
+    });
+    res.json(response.data);
+  } catch (err) {
+    console.error('SQL validate error:', err.message);
+    res.status(err.response?.status || 500).json({ error: 'Validation failed' });
+  }
+});
+
 // --- Admin user management endpoints ---
 
 app.get('/api/admin/users', verifyToken, requireAdmin, async (req, res) => {
